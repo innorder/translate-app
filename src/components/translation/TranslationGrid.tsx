@@ -39,9 +39,9 @@ interface TranslationKey {
 interface TranslationGridProps {
   translationKeys?: TranslationKey[];
   languages?: string[];
-  onEditKey?: (key: TranslationKey) => void;
-  onDeleteKey?: (key: TranslationKey) => void;
-  onSelectKeys?: (keys: TranslationKey[]) => void;
+  onEditKey?: any;
+  onDeleteKey?: any;
+  onSelectKeys?: any;
 }
 
 const TranslationGrid: React.FC<TranslationGridProps> = ({
@@ -60,7 +60,7 @@ const TranslationGrid: React.FC<TranslationGridProps> = ({
 
     setSelectedKeys(newSelectedKeys);
     onSelectKeys(
-      translationKeys.filter((key) => newSelectedKeys.includes(key.id)),
+      translationKeys.filter((key) => newSelectedKeys.includes(key.id))
     );
   };
 
