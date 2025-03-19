@@ -64,14 +64,18 @@ const mockTranslations: Record<
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { locale: string; namespace: string } },
+  { params }: { params: { locale: string; namespace: string } }
 ) {
   // Get parameters from the URL
   const { locale, namespace } = params;
 
   // Get authorization header
-  const authHeader = request.headers.get("authorization");
+  const header = request.headers as unknown as any;
+  const authHeader = header["Authorization"];
   const projectId = request.headers.get("project-id");
+  console.log("Req", request.headers);
+  console.log("##################");
+  console.log("auth", authHeader, header["Authorization"]);
 
   // In a real application, validate the API key and project ID
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
