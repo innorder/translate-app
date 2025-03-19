@@ -62,6 +62,7 @@ const ApiKeyGenerator = ({
 
   const getCodeSnippet = (type: string) => {
     const baseUrl = "https://api.translation-service.com";
+    console.log("helllllllo");
 
     switch (type) {
       case "react":

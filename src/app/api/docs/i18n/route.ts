@@ -6,7 +6,8 @@ import { NextResponse } from "next/server";
 export async function GET() {
   return NextResponse.json({
     title: "Translation Management i18n Integration",
-    description: "How to use the Translation Management App like i18next in your applications",
+    description:
+      "How to use the Translation Management App like i18next in your applications",
     instructions: {
       setup: `
 # Translation Management i18n Integration
@@ -42,7 +43,7 @@ function MyComponent() {
   const { t, loading, error } = useTranslations();
   
   if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error}</div>;
+  if (error) return <div>Error: {error.message}</div>;
   
   return (
     <div>
@@ -56,13 +57,16 @@ function MyComponent() {
 ### With Custom Locale and Namespace
 
 \`\`\`jsx
+import { useState } from 'react';
+import { useTranslations } from '@your-org/translation-client';
+
 function MyComponent() {
   const [locale, setLocale] = useState('en');
   const { t } = useTranslations({ locale, namespace: 'admin' });
   
   return (
     <div>
-      <select onChange={(e) => setLocale(e.target.value)}>
+      <select onChange={(e) => setLocale(e.target.value)} value={locale}>
         <option value="en">English</option>
         <option value="fr">French</option>
         <option value="es">Spanish</option>
@@ -112,45 +116,54 @@ export default function ClientComponent() {
 
 ### Server Components
 
-\`\`\`jsx
+\`\`\`tsx
 import { headers } from 'next/headers';
 
-async function getTranslations(locale) {
-  const res = await fetch(
-    `https://your-translation-app.com/api/translations?locale=${locale}`,
-    {
-      headers: {
-        'Authorization': `Bearer ${process.env.TRANSLATION_API_KEY}`,
-        'Project-ID': 'your-project-id',
-      },
-      next: { revalidate: 3600 }, // Cache for 1 hour
+async function getTranslations(locale: string) {
+  try {
+    const res = await fetch(
+      \`https://your-translation-app.com/api/translations?locale=\${locale}\`,
+      {
+        headers: {
+          'Authorization': \`Bearer \${process.env.TRANSLATION_API_KEY}\`,
+          'Project-ID': 'your-project-id',
+        },
+        next: { revalidate: 3600 }, // Cache for 1 hour
+      }
+    );
+
+    if (!res.ok) {
+      throw new Error('Failed to fetch translations');
     }
-  );
-  
-  return res.json();
+
+    return res.json();
+  } catch (error) {
+    console.error('Error fetching translations:', error);
+    return {};
+  }
 }
 
 export default async function ServerComponent() {
   const headersList = headers();
   const locale = headersList.get('x-locale') || 'en';
-  
+
   const translations = await getTranslations(locale);
-  
-  function t(key, params = {}) {
+
+  function t(key: string, params: Record<string, string> = {}): string {
     if (!translations[key]) return key;
-    
+
     let text = translations[key];
     Object.entries(params).forEach(([paramName, value]) => {
-      text = text.replace(new RegExp(`{{${paramName}}}`, 'g'), value);
+      text = text.replace(new RegExp(\`{{\${paramName}}}\`, 'g'), value);
     });
-    
+
     return text;
   }
-  
+
   return <div>{t('welcome')}</div>;
 }
 \`\`\`
-      `
-    }
+      `,
+    },
   });
 }
