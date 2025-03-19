@@ -361,6 +361,36 @@ export default function TranslationDashboard() {
     setTranslationKeys((prevKeys) => prevKeys.filter((k) => k.id !== key.id));
   };
 
+  // Listen for auto-translate events at the page level
+  React.useEffect(() => {
+    const handleAutoTranslateComplete = (event: any) => {
+      const { translations } = event.detail;
+
+      // If we have a current edit key, update its translations
+      if (currentEditKey) {
+        setCurrentEditKey((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            translations: { ...prev.translations, ...translations },
+          };
+        });
+      }
+    };
+
+    document.addEventListener(
+      "auto-translate-complete",
+      handleAutoTranslateComplete,
+    );
+
+    return () => {
+      document.removeEventListener(
+        "auto-translate-complete",
+        handleAutoTranslateComplete,
+      );
+    };
+  }, [currentEditKey]);
+
   const handleDeleteSelected = () => {
     console.log("Delete selected keys:", selectedKeys);
     const selectedIds = selectedKeys.map((key) => key.id);
@@ -402,7 +432,9 @@ export default function TranslationDashboard() {
                 translations: data.translations,
                 lastUpdated: currentDate,
                 status: Object.keys(data.translations).every(
-                  (lang) => !!data.translations[lang],
+                  (lang) =>
+                    !!data.translations[lang] &&
+                    data.translations[lang].trim() !== "",
                 )
                   ? "complete"
                   : "incomplete",
@@ -427,7 +459,8 @@ export default function TranslationDashboard() {
         translations: data.translations,
         lastUpdated: currentDate,
         status: Object.keys(data.translations).every(
-          (lang) => !!data.translations[lang],
+          (lang) =>
+            !!data.translations[lang] && data.translations[lang].trim() !== "",
         )
           ? "complete"
           : "incomplete",
@@ -440,6 +473,7 @@ export default function TranslationDashboard() {
         ],
       };
 
+      console.log("Creating new key with translations:", data.translations);
       setTranslationKeys((prevKeys) => [...prevKeys, newKey]);
     }
 
