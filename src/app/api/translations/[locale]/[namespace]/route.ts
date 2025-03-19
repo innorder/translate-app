@@ -71,11 +71,11 @@ export async function GET(
 
   // Get authorization header
   const header = request.headers as unknown as any;
-  const authHeader = header["Authorization"];
+  const authHeader = request.headers.get("authorization");
   const projectId = request.headers.get("project-id");
   console.log("Req", request.headers);
   console.log("##################");
-  console.log("auth", authHeader, header["Authorization"]);
+  console.log("auth", authHeader);
 
   // In a real application, validate the API key and project ID
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
