@@ -75,7 +75,34 @@ const TranslationKeyDialog = ({
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    // If we have base text but missing translations, auto-translate before saving
+    if (data.translations["en"] && data.translations["en"].trim() !== "") {
+      const targetLanguages = languages
+        .filter((lang) => lang.code !== "en")
+        .map((lang) => lang.code);
+
+      // Check if any translations are missing
+      const needsTranslation = targetLanguages.some(
+        (lang) =>
+          !data.translations[lang] || data.translations[lang].trim() === "",
+      );
+
+      if (needsTranslation && !editMode) {
+        setIsTranslating(true);
+        await onAutoTranslate("en", targetLanguages);
+        // Wait a moment for translations to be applied
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        // Get the latest translations from the state after auto-translation
+        const updatedData = { ...data };
+        setIsTranslating(false);
+        onSave(updatedData);
+        onOpenChange(false);
+        return;
+      }
+    }
+
     onSave(data);
     onOpenChange(false);
   };
@@ -100,11 +127,14 @@ const TranslationKeyDialog = ({
         updatedTranslations[lang] = translations[lang];
       });
 
-      setData({
+      // Update the data state with new translations
+      const updatedData = {
         ...data,
         translations: updatedTranslations,
-      });
+      };
 
+      setData(updatedData);
+      console.log("Updated translations in dialog:", updatedTranslations);
       setIsTranslating(false);
     };
 
@@ -232,7 +262,9 @@ const TranslationKeyDialog = ({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleSave}>{editMode ? "Update" : "Create"}</Button>
+          <Button onClick={handleSave} disabled={isTranslating}>
+            {isTranslating ? "Translating..." : editMode ? "Update" : "Create"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
