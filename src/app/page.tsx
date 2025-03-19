@@ -12,6 +12,7 @@ import SettingsDialog from "@/components/translation/SettingsDialog";
 import LanguageManager from "@/components/translation/LanguageManager";
 import ApiKeyGenerator from "@/components/translation/ApiKeyGenerator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import TranslationGrid from "@/components/translation/TranslationGrid";
 
 interface Namespace {
   id: string;
@@ -27,6 +28,8 @@ interface TranslationKey {
   translations: {
     [language: string]: string;
   };
+  history: any[];
+  isTranslating?: boolean;
 }
 
 export default function TranslationDashboard() {
@@ -37,7 +40,7 @@ export default function TranslationDashboard() {
   const [languageManagerOpen, setLanguageManagerOpen] = useState(false);
   const [apiKeyGeneratorOpen, setApiKeyGeneratorOpen] = useState(false);
   const [currentEditKey, setCurrentEditKey] = useState<TranslationKey | null>(
-    null,
+    null
   );
 
   // State for namespace selection
@@ -203,7 +206,7 @@ export default function TranslationDashboard() {
 
     const newKeys = importedData.filter((item) => !existingKeys.has(item.key));
     const updatedKeys = importedData.filter((item) =>
-      existingKeys.has(item.key),
+      existingKeys.has(item.key)
     );
 
     // Update existing keys
@@ -223,7 +226,7 @@ export default function TranslationDashboard() {
           translations: mergedTranslations,
           lastUpdated: new Date().toISOString().split("T")[0],
           status: Object.keys(mergedTranslations).every(
-            (lang) => !!mergedTranslations[lang],
+            (lang) => !!mergedTranslations[lang]
           )
             ? "complete"
             : "incomplete",
@@ -237,7 +240,7 @@ export default function TranslationDashboard() {
 
     // Show success message
     alert(
-      `Import complete: ${newKeys.length} new keys added, ${updatedKeys.length} keys updated`,
+      `Import complete: ${newKeys.length} new keys added, ${updatedKeys.length} keys updated`
     );
   };
 
@@ -262,14 +265,14 @@ export default function TranslationDashboard() {
 
         if (!apiKey) {
           alert(
-            "Please add a Google Translate API key in Settings > API to auto-translate new languages",
+            "Please add a Google Translate API key in Settings > API to auto-translate new languages"
           );
           return;
         }
 
         // Show loading message
         alert(
-          `Auto-translating content for ${newLanguages.length} new language(s). This may take a moment...`,
+          `Auto-translating content for ${newLanguages.length} new language(s). This may take a moment...`
         );
 
         try {
@@ -300,7 +303,7 @@ export default function TranslationDashboard() {
                 .every(
                   (code) =>
                     key.translations[code] &&
-                    key.translations[code].trim() !== "",
+                    key.translations[code].trim() !== ""
                 );
 
               if (allLanguagesPresent) {
@@ -315,7 +318,7 @@ export default function TranslationDashboard() {
         } catch (error) {
           console.error("Auto-translation error:", error);
           alert(
-            "Auto-translation failed. Please check your API key and try again.",
+            "Auto-translation failed. Please check your API key and try again."
           );
         }
       }
@@ -332,7 +335,7 @@ export default function TranslationDashboard() {
   };
 
   const handleSaveLanguages = (
-    updatedLanguages: { code: string; name: string }[],
+    updatedLanguages: { code: string; name: string }[]
   ) => {
     setLanguages(updatedLanguages);
     console.log("Languages updated:", updatedLanguages);
@@ -395,7 +398,7 @@ export default function TranslationDashboard() {
     console.log("Delete selected keys:", selectedKeys);
     const selectedIds = selectedKeys.map((key) => key.id);
     setTranslationKeys((prevKeys) =>
-      prevKeys.filter((key) => !selectedIds.includes(key.id)),
+      prevKeys.filter((key) => !selectedIds.includes(key.id))
     );
     setSelectedKeys([]);
   };
@@ -434,7 +437,7 @@ export default function TranslationDashboard() {
                 status: Object.keys(data.translations).every(
                   (lang) =>
                     !!data.translations[lang] &&
-                    data.translations[lang].trim() !== "",
+                    data.translations[lang].trim() !== ""
                 )
                   ? "complete"
                   : "incomplete",
@@ -447,8 +450,8 @@ export default function TranslationDashboard() {
                   ...(key.history || []),
                 ],
               }
-            : key,
-        ),
+            : key
+        )
       );
     } else {
       // Create new key
@@ -460,7 +463,7 @@ export default function TranslationDashboard() {
         lastUpdated: currentDate,
         status: Object.keys(data.translations).every(
           (lang) =>
-            !!data.translations[lang] && data.translations[lang].trim() !== "",
+            !!data.translations[lang] && data.translations[lang].trim() !== ""
         )
           ? "complete"
           : "incomplete",
@@ -484,7 +487,7 @@ export default function TranslationDashboard() {
 
   const handleAutoTranslate = async (
     sourceLanguage: string,
-    targetLanguages: string[],
+    targetLanguages: string[]
   ) => {
     console.log("Auto translate from", sourceLanguage, "to", targetLanguages);
 
@@ -520,7 +523,7 @@ export default function TranslationDashboard() {
       } else {
         // This is for when we're adding a new key
         const dialogData = document.getElementById(
-          "en-base-text",
+          "en-base-text"
         ) as HTMLTextAreaElement;
         sourceText = dialogData?.value || "";
       }

@@ -48,11 +48,11 @@ interface TranslationKey {
 }
 
 interface TranslationTableProps {
-  translationKeys?: TranslationKey[];
-  languages?: string[];
-  onEditKey?: (key: TranslationKey) => void;
-  onDeleteKey?: (key: TranslationKey) => void;
-  onSelectKeys?: (keys: TranslationKey[]) => void;
+  translationKeys: TranslationKey[];
+  languages: string[];
+  onEditKey: any;
+  onDeleteKey: any;
+  onSelectKeys: any;
 }
 
 const mockTranslationKeys: TranslationKey[] = [
@@ -126,11 +126,11 @@ const mockTranslationKeys: TranslationKey[] = [
 const mockLanguages = ["en", "fr", "es", "de"];
 
 const TranslationTable: React.FC<TranslationTableProps> = ({
-  translationKeys = mockTranslationKeys,
-  languages = mockLanguages,
-  onEditKey = () => {},
-  onDeleteKey = () => {},
-  onSelectKeys = () => {},
+  translationKeys,
+  languages,
+  onEditKey,
+  onDeleteKey,
+  onSelectKeys,
 }) => {
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [sortConfig, setSortConfig] = useState<{
@@ -199,7 +199,7 @@ const TranslationTable: React.FC<TranslationTableProps> = ({
 
     setSelectedKeys(newSelectedKeys);
     onSelectKeys(
-      translationKeys.filter((key) => newSelectedKeys.includes(key.id)),
+      translationKeys.filter((key) => newSelectedKeys.includes(key.id))
     );
   };
 
