@@ -30,9 +30,8 @@ const TableToolbar = ({
   selectedCount = 0,
   filterOptions = [
     { value: "all", label: "All Keys" },
-    { value: "complete", label: "Complete" },
-    { value: "incomplete", label: "Incomplete" },
-    { value: "outdated", label: "Outdated" },
+    { value: "confirmed", label: "Confirmed" },
+    { value: "unconfirmed", label: "Unconfirmed" },
   ],
   onFilterChange = () => {},
 }: TableToolbarProps) => {

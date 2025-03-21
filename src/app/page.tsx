@@ -1,17 +1,21 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Upload, Download } from "lucide-react";
 import DashboardHeader from "@/components/translation/DashboardHeader";
 import NamespaceSelector from "@/components/translation/NamespaceSelector";
 import TranslationTable from "@/components/translation/TranslationTable";
 import ImportExportMenu from "@/components/translation/ImportExportMenu";
-// Activity panel removed
 import TableToolbar from "@/components/translation/TableToolbar";
-import TranslationKeyDialog from "@/components/translation/TranslationKeyDialog";
 import SettingsDialog from "@/components/translation/SettingsDialog";
 import LanguageManager from "@/components/translation/LanguageManager";
 import ApiKeyGenerator from "@/components/translation/ApiKeyGenerator";
+import ApiKeyManager from "@/components/translation/ApiKeyManager";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import HistoryDialog from "@/components/translation/HistoryDialog";
+import { supabase } from "@/lib/supabase";
+import { recordHistory } from "@/lib/history-service";
 
 interface Namespace {
   id: string;
@@ -23,7 +27,7 @@ interface TranslationKey {
   key: string;
   description?: string;
   lastUpdated: string;
-  status: "complete" | "incomplete" | "outdated";
+  status: "confirmed" | "unconfirmed";
   translations: {
     [language: string]: string;
   };
@@ -33,12 +37,14 @@ export default function TranslationDashboard() {
   // State for dialogs
   const [importExportOpen, setImportExportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [editKeyDialogOpen, setEditKeyDialogOpen] = useState(false);
   const [languageManagerOpen, setLanguageManagerOpen] = useState(false);
   const [apiKeyGeneratorOpen, setApiKeyGeneratorOpen] = useState(false);
-  const [currentEditKey, setCurrentEditKey] = useState<TranslationKey | null>(
-    null,
-  );
+  const [apiKeyManagerOpen, setApiKeyManagerOpen] = useState(false);
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [selectedHistoryKey, setSelectedHistoryKey] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   // State for namespace selection
   const [selectedNamespace, setSelectedNamespace] = useState<Namespace>({
@@ -49,6 +55,9 @@ export default function TranslationDashboard() {
   // State for selected translation keys
   const [selectedKeys, setSelectedKeys] = useState<TranslationKey[]>([]);
 
+  // State for tracking currently editing key
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+
   // State for all translation keys
   const [translationKeys, setTranslationKeys] = useState<TranslationKey[]>([
     {
@@ -56,7 +65,7 @@ export default function TranslationDashboard() {
       key: "welcome.message",
       description: "Welcome message on homepage",
       lastUpdated: "2023-10-15",
-      status: "complete",
+      status: "confirmed",
       translations: {
         en: "Welcome to our application",
         fr: "Bienvenue dans notre application",
@@ -82,7 +91,7 @@ export default function TranslationDashboard() {
       key: "button.submit",
       description: "Submit button text",
       lastUpdated: "2023-10-10",
-      status: "complete",
+      status: "confirmed",
       translations: {
         en: "Submit",
         fr: "Soumettre",
@@ -103,7 +112,7 @@ export default function TranslationDashboard() {
       key: "error.required",
       description: "Error message for required fields",
       lastUpdated: "2023-09-28",
-      status: "incomplete",
+      status: "unconfirmed",
       translations: {
         en: "This field is required",
         fr: "Ce champ est obligatoire",
@@ -119,7 +128,7 @@ export default function TranslationDashboard() {
       key: "nav.home",
       description: "Navigation label for home",
       lastUpdated: "2023-09-20",
-      status: "outdated",
+      status: "unconfirmed",
       translations: {
         en: "Home",
         fr: "Accueil",
@@ -140,7 +149,7 @@ export default function TranslationDashboard() {
       key: "nav.settings",
       description: "Navigation label for settings",
       lastUpdated: "2023-09-15",
-      status: "complete",
+      status: "confirmed",
       translations: {
         en: "Settings",
         fr: "Paramètres",
@@ -152,9 +161,6 @@ export default function TranslationDashboard() {
       ],
     },
   ]);
-
-  // State for view mode
-  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
 
   // State for languages
   const [languages, setLanguages] = useState<{ code: string; name: string }[]>([
@@ -212,21 +218,34 @@ export default function TranslationDashboard() {
       if (match) {
         // Merge translations
         const mergedTranslations = { ...key.translations };
-        Object.keys(match.translations).forEach((lang) => {
+
+        // Check if this is from a single-language import
+        if (match.singleLanguageImport) {
+          // Only update the specific language from the import
+          const lang = match.singleLanguageImport;
           if (match.translations[lang]) {
             mergedTranslations[lang] = match.translations[lang];
+
+            // If this is an English import, make sure the base text is set
+            if (lang === "en") {
+              mergedTranslations.en = match.translations.en;
+            }
           }
-        });
+        } else {
+          // Standard multi-language import - update all languages
+          Object.keys(match.translations).forEach((lang) => {
+            if (match.translations[lang]) {
+              mergedTranslations[lang] = match.translations[lang];
+            }
+          });
+        }
 
         return {
           ...key,
           translations: mergedTranslations,
           lastUpdated: new Date().toISOString().split("T")[0],
-          status: Object.keys(mergedTranslations).every(
-            (lang) => !!mergedTranslations[lang],
-          )
-            ? "complete"
-            : "incomplete",
+          // Imported keys are always unconfirmed until explicitly confirmed
+          status: "unconfirmed",
         };
       }
       return key;
@@ -294,18 +313,8 @@ export default function TranslationDashboard() {
                 ...result.translations,
               };
 
-              // Update status if now complete
-              const allLanguagesPresent = languages
-                .map((lang) => lang.code)
-                .every(
-                  (code) =>
-                    key.translations[code] &&
-                    key.translations[code].trim() !== "",
-                );
-
-              if (allLanguagesPresent) {
-                key.status = "complete";
-              }
+              // Auto-translated keys remain unconfirmed
+              key.status = "unconfirmed";
             }
           }
 
@@ -328,7 +337,14 @@ export default function TranslationDashboard() {
 
   // Handle API integration
   const handleApiIntegration = () => {
-    setApiKeyGeneratorOpen(true);
+    // In production mode, use the API Key Manager
+    // For demo/development, use the API Key Generator
+    const isProduction = process.env.NODE_ENV === "production";
+    if (isProduction) {
+      setApiKeyManagerOpen(true);
+    } else {
+      setApiKeyGeneratorOpen(true);
+    }
   };
 
   const handleSaveLanguages = (
@@ -340,41 +356,252 @@ export default function TranslationDashboard() {
 
   // Handle translation key actions
   const handleAddKey = () => {
-    setCurrentEditKey(null);
-    setEditKeyDialogOpen(true);
+    // Dispatch an event to create a new key row
+    document.dispatchEvent(new CustomEvent("add-new-key"));
   };
 
-  const handleEditKey = (key: TranslationKey) => {
-    setCurrentEditKey(key);
-    setEditKeyDialogOpen(true);
+  const handleEditKey = (key: TranslationKey, isInlineEdit = false) => {
+    // If it's already an inline edit, we don't need to do anything
+    if (isInlineEdit) return;
+
+    // Otherwise, we'll trigger inline editing for the key name
+    const event = new CustomEvent("start-inline-edit", {
+      detail: { keyId: key.id, field: "key" },
+    });
+    document.dispatchEvent(event);
   };
 
-  const handleDeleteKey = (key: TranslationKey) => {
+  const handleDeleteKey = async (key: TranslationKey) => {
     console.log("Delete key:", key);
     // Add to deletion history before removing
     const currentDate = new Date().toISOString().split("T")[0];
-    const currentUser = "Current User"; // In a real app, get from auth
 
-    // Log the deletion in history (in a real app, you might store this elsewhere)
-    console.log(`Key "${key.key}" deleted by ${currentUser} on ${currentDate}`);
+    // Record deletion in database history
+    try {
+      await recordHistory({
+        key_id: key.id,
+        action: "Deleted key",
+        field: "key",
+        old_value: key.key,
+      });
 
-    setTranslationKeys((prevKeys) => prevKeys.filter((k) => k.id !== key.id));
+      // Log the deletion
+      console.log(`Key "${key.key}" deleted on ${currentDate}`);
+
+      // Remove from state
+      setTranslationKeys((prevKeys) => prevKeys.filter((k) => k.id !== key.id));
+    } catch (error) {
+      console.error("Failed to record deletion history:", error);
+    }
   };
+
+  // Listen for view-key-history events
+  React.useEffect(() => {
+    const handleViewKeyHistory = (event: any) => {
+      if (event.detail) {
+        const { keyId, keyName } = event.detail;
+        setSelectedHistoryKey({ id: keyId, name: keyName });
+        setHistoryDialogOpen(true);
+      }
+    };
+
+    document.addEventListener("view-key-history", handleViewKeyHistory);
+    return () => {
+      document.removeEventListener("view-key-history", handleViewKeyHistory);
+    };
+  }, []);
+
+  // Listen for confirm-translations events
+  React.useEffect(() => {
+    const handleConfirmTranslations = (event: any) => {
+      const { keyId } = event.detail;
+      if (keyId) {
+        setTranslationKeys((prevKeys) =>
+          prevKeys.map((key) => {
+            if (key.id === keyId) {
+              // Create an updated key with confirmed status
+              const updatedKey = {
+                ...key,
+                status: "confirmed",
+                lastUpdated: new Date().toISOString().split("T")[0],
+              };
+
+              // Record history in database
+              recordHistory({
+                key_id: keyId,
+                action: "Confirmed translations",
+                field: "status",
+                old_value: "unconfirmed",
+                new_value: "confirmed",
+              }).catch((error) => {
+                console.error("Failed to record confirmation history:", error);
+              });
+
+              return updatedKey;
+            }
+            return key;
+          }),
+        );
+      }
+    };
+
+    document.addEventListener(
+      "confirm-translations",
+      handleConfirmTranslations,
+    );
+
+    return () => {
+      document.removeEventListener(
+        "confirm-translations",
+        handleConfirmTranslations,
+      );
+    };
+  }, []);
+
+  // Listen for update-key, delete-key, and add-key events at the page level
+  React.useEffect(() => {
+    const handleUpdateKeyEvent = (event: any) => {
+      if (event.detail) {
+        const { keyId, field, value } = event.detail;
+        handleUpdateKey(keyId, field, value);
+      } else {
+        console.error("Received update-key event with undefined detail");
+      }
+    };
+
+    const handleDeleteKeyEvent = (event: any) => {
+      if (event.detail) {
+        const { keyId } = event.detail;
+        setTranslationKeys((prevKeys) =>
+          prevKeys.filter((k) => k.id !== keyId),
+        );
+      }
+    };
+
+    const handleAddKeyEvent = (event: any) => {
+      if (event.detail && event.detail.key) {
+        let newKey = event.detail.key;
+        const keyId = newKey.id;
+
+        // Check if we have pending translations for this key
+        const pendingTranslationsListener = (e: any) => {
+          if (e.detail.keyId === keyId && e.detail.translations) {
+            console.log(
+              "Found pending translations for new key:",
+              keyId,
+              e.detail.translations,
+            );
+            // Update the new key with the translations
+            newKey = {
+              ...newKey,
+              translations: {
+                ...newKey.translations,
+                ...e.detail.translations,
+              },
+              // New keys with auto-translations are unconfirmed
+              status: "unconfirmed",
+            };
+
+            // Remove this listener as we've processed the translations
+            document.removeEventListener(
+              "auto-translate-complete",
+              pendingTranslationsListener,
+            );
+          }
+        };
+
+        // Listen for one auto-translate-complete event for this key
+        document.addEventListener(
+          "auto-translate-complete",
+          pendingTranslationsListener,
+          { once: true },
+        );
+
+        // Add the new key to the state
+        setTranslationKeys((prevKeys) => [newKey, ...prevKeys]);
+      }
+    };
+
+    document.addEventListener("update-key", handleUpdateKeyEvent);
+    document.addEventListener("delete-key", handleDeleteKeyEvent);
+    document.addEventListener("add-key", handleAddKeyEvent);
+
+    return () => {
+      document.removeEventListener("update-key", handleUpdateKeyEvent);
+      document.removeEventListener("delete-key", handleDeleteKeyEvent);
+      document.removeEventListener("add-key", handleAddKeyEvent);
+    };
+  }, []);
 
   // Listen for auto-translate events at the page level
   React.useEffect(() => {
     const handleAutoTranslateComplete = (event: any) => {
-      const { translations } = event.detail;
+      const { translations, keyId } = event.detail;
+      console.log("Auto-translate complete event received:", {
+        translations,
+        keyId,
+      });
 
-      // If we have a current edit key, update its translations
-      if (currentEditKey) {
-        setCurrentEditKey((prev) => {
-          if (!prev) return null;
-          return {
-            ...prev,
-            translations: { ...prev.translations, ...translations },
-          };
-        });
+      if (keyId) {
+        // For new keys that aren't in the state yet, store translations temporarily
+        if (keyId.startsWith("new-")) {
+          console.log("Handling translations for new key:", keyId);
+          // We'll handle this in the add-key event listener
+          // Just dispatch the event with the translations
+          const completeEvent = new CustomEvent("auto-translate-complete", {
+            detail: { translations, keyId },
+          });
+          document.dispatchEvent(completeEvent);
+          return;
+        }
+
+        // Update specific key's translations
+        setTranslationKeys((prevKeys) =>
+          prevKeys.map((key) => {
+            if (key.id === keyId) {
+              return {
+                ...key,
+                translations: { ...key.translations, ...translations },
+                lastUpdated: new Date().toISOString().split("T")[0],
+                // Auto-translated keys remain unconfirmed
+                status: "unconfirmed",
+              };
+            }
+            return key;
+          }),
+        );
+      }
+    };
+
+    const handleAutoTranslateKey = (event: any) => {
+      const { keyId, sourceLanguage, targetLanguages } = event.detail;
+      handleAutoTranslate(sourceLanguage, targetLanguages, keyId);
+    };
+
+    const handleAutoTranslateRequest = async (event: any) => {
+      const { baseText, keyId } = event.detail;
+      console.log(
+        "Auto-translate request received for key",
+        keyId,
+        "with base text:",
+        baseText,
+      );
+
+      if (baseText) {
+        const targetLanguages = languages
+          .filter((lang) => lang.code !== "en")
+          .map((lang) => lang.code);
+
+        console.log("Target languages for auto-translation:", targetLanguages);
+
+        // Pass the keyId to the auto-translate function
+        const keyToTranslate = keyId || (editingKey ? editingKey : null);
+        await handleAutoTranslate("en", targetLanguages, keyToTranslate);
+      } else {
+        console.warn(
+          "Auto-translate request received but base text is empty for key",
+          keyId,
+        );
       }
     };
 
@@ -383,13 +610,28 @@ export default function TranslationDashboard() {
       handleAutoTranslateComplete,
     );
 
+    document.addEventListener("auto-translate-key", handleAutoTranslateKey);
+
+    document.addEventListener(
+      "auto-translate-request",
+      handleAutoTranslateRequest,
+    );
+
     return () => {
       document.removeEventListener(
         "auto-translate-complete",
         handleAutoTranslateComplete,
       );
+      document.removeEventListener(
+        "auto-translate-key",
+        handleAutoTranslateKey,
+      );
+      document.removeEventListener(
+        "auto-translate-request",
+        handleAutoTranslateRequest,
+      );
     };
-  }, [currentEditKey]);
+  }, [languages, editingKey]);
 
   const handleDeleteSelected = () => {
     console.log("Delete selected keys:", selectedKeys);
@@ -411,82 +653,102 @@ export default function TranslationDashboard() {
 
   const handleFilterChange = (filter: string) => {
     setCurrentFilter(filter);
-    // In a real implementation, we would filter the keys based on the filter
+    // Apply the filter to the translation keys
   };
 
-  const handleSaveKey = (data: any) => {
-    console.log("Save key:", data);
+  const handleUpdateKey = async (keyId: string, field: string, value: any) => {
+    console.log(`Update key ${keyId}, field ${field}, value:`, value);
     const currentDate = new Date().toISOString().split("T")[0];
-    const currentUser = "Current User"; // In a real app, get from auth
 
-    // Check if we're editing an existing key or creating a new one
-    if (currentEditKey) {
-      // Update existing key
-      setTranslationKeys((prevKeys) =>
-        prevKeys.map((key) =>
-          key.id === currentEditKey.id
-            ? {
-                ...key,
-                key: data.key,
-                description: data.description,
-                translations: data.translations,
-                lastUpdated: currentDate,
-                status: Object.keys(data.translations).every(
-                  (lang) =>
-                    !!data.translations[lang] &&
-                    data.translations[lang].trim() !== "",
-                )
-                  ? "complete"
-                  : "incomplete",
-                history: [
-                  {
-                    action: "Updated translations",
-                    user: currentUser,
-                    timestamp: currentDate,
-                  },
-                  ...(key.history || []),
-                ],
-              }
-            : key,
-        ),
-      );
-    } else {
-      // Create new key
-      const newKey: TranslationKey = {
-        id: Date.now().toString(), // Generate a unique ID
-        key: data.key,
-        description: data.description,
-        translations: data.translations,
-        lastUpdated: currentDate,
-        status: Object.keys(data.translations).every(
-          (lang) =>
-            !!data.translations[lang] && data.translations[lang].trim() !== "",
-        )
-          ? "complete"
-          : "incomplete",
-        history: [
-          {
-            action: "Created",
-            user: currentUser,
-            timestamp: currentDate,
-          },
-        ],
-      };
+    // Get the key before updating
+    const keyToUpdate = translationKeys.find((k) => k.id === keyId);
+    if (!keyToUpdate) return;
 
-      console.log("Creating new key with translations:", data.translations);
-      setTranslationKeys((prevKeys) => [...prevKeys, newKey]);
+    // Determine old value based on field
+    let oldValue = "";
+    if (field === "key") {
+      oldValue = keyToUpdate.key;
+    } else if (field === "description") {
+      oldValue = keyToUpdate.description || "";
+    } else if (field.startsWith("translation_")) {
+      const lang = field.replace("translation_", "");
+      oldValue = keyToUpdate.translations[lang] || "";
     }
 
-    // Close the dialog and reset current edit key
-    setEditKeyDialogOpen(false);
-    setCurrentEditKey(null);
+    // Create action description
+    const actionDescription =
+      field === "key"
+        ? "Updated key name"
+        : field === "description"
+          ? "Updated description"
+          : `Updated ${field.replace("translation_", "translation for ")}`;
+
+    setTranslationKeys((prevKeys) => {
+      const updatedKeys = prevKeys.map((key) => {
+        if (key.id !== keyId) return key;
+
+        // Create updated key based on the field being edited
+        let updatedKey = { ...key, lastUpdated: currentDate };
+
+        if (field === "key") {
+          updatedKey.key = value;
+        } else if (field === "description") {
+          updatedKey.description = value;
+        } else if (field.startsWith("translation_")) {
+          const lang = field.replace("translation_", "");
+          updatedKey.translations = { ...key.translations, [lang]: value };
+
+          // Any update to translations sets status to unconfirmed
+          updatedKey.status = "unconfirmed";
+        }
+
+        // Add to local history
+        updatedKey.history = [
+          {
+            action: actionDescription,
+            user: "You", // Will be replaced with actual user in DB
+            timestamp: currentDate,
+            field: field,
+            old_value: oldValue,
+            new_value: value,
+          },
+          ...(key.history || []),
+        ];
+
+        return updatedKey;
+      });
+
+      // Force a re-render by creating a new array
+      return [...updatedKeys];
+    });
+
+    // Record history in database
+    try {
+      await recordHistory({
+        key_id: keyId,
+        action: actionDescription,
+        field: field,
+        old_value: oldValue,
+        new_value: value,
+      });
+    } catch (error) {
+      console.error("Failed to record history:", error);
+    }
   };
 
   const handleAutoTranslate = async (
     sourceLanguage: string,
     targetLanguages: string[],
+    keyId?: string,
   ) => {
-    console.log("Auto translate from", sourceLanguage, "to", targetLanguages);
+    console.log(
+      "Auto translate from",
+      sourceLanguage,
+      "to",
+      targetLanguages,
+      "for key",
+      keyId,
+    );
 
     // Get the API key from settings
     const apiKey =
@@ -494,43 +756,171 @@ export default function TranslationDashboard() {
         ? localStorage.getItem("translationApiKey")
         : null;
     if (!apiKey) {
+      console.warn("No translation API key found");
       alert("Please add a Google Translate API key in Settings > API first");
       setSettingsOpen(true);
       return;
     }
 
     try {
-      // Set translating state if we're in the edit dialog
-      if (currentEditKey) {
-        setCurrentEditKey({
-          ...currentEditKey,
-          isTranslating: true,
-        });
-      }
-
       // Import the translation API dynamically
       const { translateText } = await import("@/lib/translation-api");
 
-      // Get the source text (always from the base language - English)
-      // If we're in the edit dialog, use the current edit key
-      // Otherwise, use the data from the dialog
-      let sourceText;
-      if (currentEditKey) {
-        sourceText = currentEditKey.translations["en"];
-      } else {
-        // This is for when we're adding a new key
-        const dialogData = document.getElementById(
-          "en-base-text",
-        ) as HTMLTextAreaElement;
-        sourceText = dialogData?.value || "";
+      // Get the source text from the key's English translation
+      let sourceText = "";
+      let keyToTranslate = null;
+
+      if (keyId) {
+        // Check if it's a new key being created (starts with "new-")
+        if (keyId.startsWith("new-")) {
+          // For new keys, try to get the text from the DOM
+          const editingElement = document.querySelector(
+            `[data-key-id="${keyId}"] input[data-lang="en"], [data-key-id="${keyId}"] textarea[data-lang="en"]`,
+          );
+          if (
+            editingElement instanceof HTMLInputElement ||
+            editingElement instanceof HTMLTextAreaElement
+          ) {
+            sourceText = editingElement.value;
+            console.log("Got source text from new key input:", sourceText);
+          } else {
+            console.warn("Could not find input element for new key", keyId);
+            // Try to find any input with English placeholder
+            const anyEnglishInput = document.querySelector(
+              `[data-key-id="${keyId}"] input[placeholder="Base text"]`,
+            );
+            if (anyEnglishInput instanceof HTMLInputElement) {
+              sourceText = anyEnglishInput.value;
+              console.log(
+                "Got source text from base text placeholder input:",
+                sourceText,
+              );
+            }
+          }
+        } else {
+          // For existing keys
+          keyToTranslate = translationKeys.find((k) => k.id === keyId);
+          if (keyToTranslate) {
+            sourceText = keyToTranslate.translations["en"];
+            console.log(
+              "Found key to translate:",
+              keyToTranslate.key,
+              "with source text:",
+              sourceText,
+            );
+          } else {
+            console.log("Key not found with ID:", keyId);
+          }
+        }
       }
 
-      if (!sourceText) {
-        alert(`Base text is empty. Please add text in English first.`);
-        return;
+      // If we're editing a cell, get the latest value from the DOM
+      if ((!sourceText || sourceText.trim() === "") && keyId) {
+        const editingElement = document.querySelector(
+          `[data-key-id="${keyId}"] textarea, [data-key-id="${keyId}"] input[data-lang="en"]`,
+        );
+        if (
+          editingElement instanceof HTMLTextAreaElement ||
+          editingElement instanceof HTMLInputElement
+        ) {
+          sourceText = editingElement.value;
+          console.log("Got source text from input/textarea:", sourceText);
+        }
+      }
+
+      // If we still don't have source text, check if it was passed in the event
+      if (!sourceText || sourceText.trim() === "") {
+        const event = new CustomEvent("get-base-text", {
+          detail: { keyId },
+        });
+        document.dispatchEvent(event);
+
+        // Wait a short time to see if any listeners respond with the base text
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        // Check if we got a response with the base text
+        const baseTextResponse = document.querySelector(
+          `#temp-base-text-${keyId}`,
+        );
+        if (baseTextResponse) {
+          sourceText = baseTextResponse.textContent || "";
+          baseTextResponse.remove();
+          console.log("Got source text from event response:", sourceText);
+        }
+      }
+
+      // One last attempt - check if this is a newly imported key
+      if ((!sourceText || sourceText.trim() === "") && keyId) {
+        const key = translationKeys.find((k) => k.id === keyId);
+        if (key && key.translations) {
+          // First try the standard English key
+          if (key.translations.en && key.translations.en.trim() !== "") {
+            sourceText = key.translations.en;
+            console.log("Found base text from translations.en:", sourceText);
+          } else {
+            // Try to find any English-like key that has content
+            const englishKey = Object.keys(key.translations).find(
+              (lang) =>
+                (lang.toLowerCase().includes("en") ||
+                  lang === "base" ||
+                  lang === "default") &&
+                key.translations[lang] &&
+                key.translations[lang].trim() !== "",
+            );
+
+            if (englishKey) {
+              sourceText = key.translations[englishKey];
+              console.log(
+                `Found base text from translations.${englishKey}:`,
+                sourceText,
+              );
+
+              // Also update the en key for future use
+              key.translations.en = sourceText;
+            }
+          }
+        }
+      }
+
+      if (!sourceText || sourceText.trim() === "") {
+        console.warn("Base text is empty for key", keyId);
+
+        // Check if we're working with an imported key that might have non-English content
+        const keyToCheck = translationKeys.find((k) => k.id === keyId);
+        if (keyToCheck && Object.keys(keyToCheck.translations).length > 0) {
+          // Try to find any non-empty translation to use as base text
+          for (const lang in keyToCheck.translations) {
+            const value = keyToCheck.translations[lang];
+            if (value !== null && value !== undefined && value.trim() !== "") {
+              // Convert any non-string values to strings
+              sourceText =
+                typeof value === "string" ? value : JSON.stringify(value);
+              console.log(
+                `Using ${lang} translation as base text for auto-translation: ${sourceText}`,
+              );
+
+              // Update the English translation with this text
+              const updateEvent = new CustomEvent("update-key", {
+                detail: {
+                  keyId: keyId,
+                  field: "translation_en",
+                  value: sourceText,
+                },
+              });
+              document.dispatchEvent(updateEvent);
+              break;
+            }
+          }
+        }
+
+        if (!sourceText || sourceText.trim() === "") {
+          alert(`Base text is empty. Please add text in English first.`);
+          return;
+        }
       }
 
       // Call the translation API
+      console.log("Calling translation API with source text:", sourceText);
       const result = await translateText({
         sourceLanguage: "en",
         targetLanguages,
@@ -539,46 +929,30 @@ export default function TranslationDashboard() {
       });
 
       if (result.success) {
-        if (currentEditKey) {
-          // Update the current edit key with the translations
-          const updatedTranslations = { ...currentEditKey.translations };
-
-          // Merge the new translations
-          Object.keys(result.translations).forEach((lang) => {
-            updatedTranslations[lang] = result.translations[lang];
-          });
-
-          // Update the current edit key
-          setCurrentEditKey({
-            ...currentEditKey,
-            translations: updatedTranslations,
-            isTranslating: false,
-          });
-        } else {
-          // We're in the add key dialog, update the form fields
-          const event = new CustomEvent("auto-translate-complete", {
-            detail: { translations: result.translations },
-          });
-          document.dispatchEvent(event);
-        }
+        console.log(
+          "Translation successful for key",
+          keyId,
+          ":",
+          result.translations,
+        );
+        // Dispatch event with translations and key ID
+        const event = new CustomEvent("auto-translate-complete", {
+          detail: {
+            translations: result.translations,
+            keyId: keyId,
+          },
+        });
+        document.dispatchEvent(event);
+        return result.translations; // Return translations for direct use
       } else {
+        console.error("Translation failed:", result.error);
         alert(`Translation failed: ${result.error || "Unknown error"}`);
-        if (currentEditKey) {
-          setCurrentEditKey({
-            ...currentEditKey,
-            isTranslating: false,
-          });
-        }
+        return null;
       }
     } catch (error) {
       console.error("Translation error:", error);
       alert("Translation failed. Please check your API key and try again.");
-      if (currentEditKey) {
-        setCurrentEditKey({
-          ...currentEditKey,
-          isTranslating: false,
-        });
-      }
+      return null;
     }
   };
 
@@ -595,7 +969,6 @@ export default function TranslationDashboard() {
         onExport={handleExport}
         onSettingsOpen={handleSettingsOpen}
         onManageLanguages={handleManageLanguages}
-        onApiIntegration={handleApiIntegration}
         onCreateNamespace={() => {
           const name = prompt("Enter namespace name");
           if (name) handleCreateNamespace(name);
@@ -615,54 +988,47 @@ export default function TranslationDashboard() {
               onNamespaceCreate={handleCreateNamespace}
               onNamespaceDelete={handleDeleteNamespace}
             />
-
-            <div className="flex items-center gap-2">
-              <Tabs defaultValue="table" className="w-[200px]">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger
-                    value="table"
-                    onClick={() => setViewMode("table")}
-                  >
-                    Table
-                  </TabsTrigger>
-                  <TabsTrigger value="grid" onClick={() => setViewMode("grid")}>
-                    Grid
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
           </div>
 
           {/* Table Toolbar */}
-          <TableToolbar
-            onSearch={handleSearch}
-            onAddKey={handleAddKey}
-            onDeleteSelected={handleDeleteSelected}
-            onImport={handleImport}
-            onExport={handleExport}
-            selectedCount={selectedKeys.length}
-            onFilterChange={handleFilterChange}
-          />
+          <div className="flex justify-between items-center">
+            <TableToolbar
+              onSearch={handleSearch}
+              onAddKey={handleAddKey}
+              onDeleteSelected={handleDeleteSelected}
+              selectedCount={selectedKeys.length}
+              onFilterChange={handleFilterChange}
+            />
+            <div className="flex items-center space-x-2">
+              <Button variant="outline" onClick={handleImport}>
+                <Upload className="h-4 w-4 mr-2" />
+                Import
+              </Button>
+              <Button variant="outline" onClick={handleExport}>
+                <Download className="h-4 w-4 mr-2" />
+                Export
+              </Button>
+            </div>
+          </div>
 
-          {/* Translation Table/Grid */}
+          {/* Translation Table */}
           <div className="flex-1 overflow-hidden rounded-md border">
-            {viewMode === "table" ? (
-              <TranslationTable
-                translationKeys={translationKeys}
-                onEditKey={handleEditKey}
-                onDeleteKey={handleDeleteKey}
-                onSelectKeys={handleSelectKeys}
-                languages={languages.map((lang) => lang.code)}
-              />
-            ) : (
-              <TranslationGrid
-                translationKeys={translationKeys}
-                onEditKey={handleEditKey}
-                onDeleteKey={handleDeleteKey}
-                onSelectKeys={handleSelectKeys}
-                languages={languages.map((lang) => lang.code)}
-              />
-            )}
+            <TranslationTable
+              translationKeys={translationKeys.filter((key) => {
+                if (currentFilter === "all") return true;
+                if (currentFilter === "confirmed")
+                  return key.status === "confirmed";
+                if (currentFilter === "unconfirmed")
+                  return key.status === "unconfirmed";
+                return true;
+              })}
+              onEditKey={handleEditKey}
+              onDeleteKey={handleDeleteKey}
+              onSelectKeys={handleSelectKeys}
+              languages={languages.map((lang) => lang.code)}
+              onStartEditing={(keyId) => setEditingKey(keyId)}
+              onFinishEditing={() => setEditingKey(null)}
+            />
           </div>
 
           {/* Table Info */}
@@ -694,18 +1060,10 @@ export default function TranslationDashboard() {
         onSave={handleSaveSettings}
         languages={languages}
         onManageLanguages={handleManageLanguages}
+        onApiIntegration={handleApiIntegration}
       />
 
-      {/* Edit Key Dialog */}
-      <TranslationKeyDialog
-        open={editKeyDialogOpen}
-        onOpenChange={setEditKeyDialogOpen}
-        editMode={!!currentEditKey}
-        initialData={currentEditKey || undefined}
-        onSave={handleSaveKey}
-        onAutoTranslate={handleAutoTranslate}
-        languages={languages}
-      />
+      {/* No more Edit Key Dialog */}
 
       {/* Language Manager Dialog */}
       <LanguageManager
@@ -716,12 +1074,31 @@ export default function TranslationDashboard() {
         defaultLanguage="en"
       />
 
-      {/* API Key Generator Dialog */}
+      {/* API Key Generator Dialog (for demo/development) */}
       <ApiKeyGenerator
         open={apiKeyGeneratorOpen}
         onOpenChange={setApiKeyGeneratorOpen}
         projectId="translation-project-123"
       />
+
+      {/* API Key Manager Dialog (for production) */}
+      {process.env.NODE_ENV === "production" && (
+        <ApiKeyManager
+          open={apiKeyManagerOpen}
+          onOpenChange={setApiKeyManagerOpen}
+          projectId="translation-project-123"
+        />
+      )}
+
+      {/* History Dialog */}
+      {selectedHistoryKey && (
+        <HistoryDialog
+          open={historyDialogOpen}
+          onOpenChange={setHistoryDialogOpen}
+          keyId={selectedHistoryKey.id}
+          keyName={selectedHistoryKey.name}
+        />
+      )}
     </main>
   );
 }

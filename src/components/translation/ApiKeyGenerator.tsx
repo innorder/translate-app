@@ -34,6 +34,12 @@ const ApiKeyGenerator = ({
     if (typeof window !== "undefined") {
       const savedKey = localStorage.getItem("translationApiKey");
       if (savedKey) setApiKey(savedKey);
+      else {
+        // Auto-generate a demo API key if none exists
+        const demoKey = `demo_${Math.random().toString(36).substring(2, 15)}_${Math.random().toString(36).substring(2, 15)}`;
+        localStorage.setItem("translationApiKey", demoKey);
+        setApiKey(demoKey);
+      }
     }
   }, []);
   const [keyName, setKeyName] = useState<string>("");
@@ -52,6 +58,9 @@ const ApiKeyGenerator = ({
     if (typeof window !== "undefined") {
       localStorage.setItem("translationApiKey", newKey);
     }
+
+    // In a production environment, this would save the API key to the database
+    // using the ApiKeyManager component's functionality
   };
 
   const copyToClipboard = (text: string, type: string) => {

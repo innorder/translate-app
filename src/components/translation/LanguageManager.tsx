@@ -8,10 +8,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, Trash2, Globe } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import LanguageSelector from "./LanguageSelector";
 
 interface LanguageManagerProps {
   open: boolean;
@@ -36,35 +36,18 @@ const LanguageManager = ({
   defaultLanguage = "en",
 }: LanguageManagerProps) => {
   const [currentLanguages, setCurrentLanguages] = useState([...languages]);
-  const [newLanguageCode, setNewLanguageCode] = useState("");
-  const [newLanguageName, setNewLanguageName] = useState("");
   const [error, setError] = useState("");
+  const [showLanguageSelector, setShowLanguageSelector] = useState(false);
 
-  const handleAddLanguage = () => {
-    if (!newLanguageCode || !newLanguageName) {
-      setError("Both language code and name are required");
-      return;
-    }
-
-    if (!/^[a-z]{2,3}(-[A-Z]{2})?$/.test(newLanguageCode)) {
-      setError(
-        "Language code must be in format 'xx' or 'xx-XX' (e.g., 'en' or 'en-US')",
-      );
-      return;
-    }
-
-    if (currentLanguages.some((lang) => lang.code === newLanguageCode)) {
+  const handleAddLanguage = (language: { code: string; name: string }) => {
+    if (currentLanguages.some((lang) => lang.code === language.code)) {
       setError("This language code already exists");
       return;
     }
 
-    setCurrentLanguages([
-      ...currentLanguages,
-      { code: newLanguageCode, name: newLanguageName },
-    ]);
-    setNewLanguageCode("");
-    setNewLanguageName("");
+    setCurrentLanguages([...currentLanguages, language]);
     setError("");
+    setShowLanguageSelector(false);
   };
 
   const handleRemoveLanguage = (code: string) => {
@@ -152,37 +135,24 @@ const LanguageManager = ({
 
           <div className="space-y-4 border-t pt-4">
             <h3 className="text-sm font-medium">Add New Language</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="languageCode">Language Code</Label>
-                <Input
-                  id="languageCode"
-                  placeholder="e.g., fr, zh-CN"
-                  value={newLanguageCode}
-                  onChange={(e) => setNewLanguageCode(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="languageName">Language Name</Label>
-                <Input
-                  id="languageName"
-                  placeholder="e.g., French, Chinese"
-                  value={newLanguageName}
-                  onChange={(e) => setNewLanguageName(e.target.value)}
-                />
-              </div>
-            </div>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
 
-            <Button
-              onClick={handleAddLanguage}
-              className="w-full"
-              variant="outline"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Language
-            </Button>
+            {showLanguageSelector ? (
+              <LanguageSelector
+                onSelectLanguage={handleAddLanguage}
+                excludedCodes={currentLanguages.map((lang) => lang.code)}
+              />
+            ) : (
+              <Button
+                onClick={() => setShowLanguageSelector(true)}
+                className="w-full"
+                variant="outline"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Language
+              </Button>
+            )}
           </div>
         </div>
 

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Code2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -37,6 +38,7 @@ interface SettingsDialogProps {
   languages?: { code: string; name: string }[];
   onSave?: (settings: any) => void;
   onManageLanguages?: () => void;
+  onApiIntegration?: () => void;
 }
 
 const SettingsDialog = ({
@@ -61,6 +63,7 @@ const SettingsDialog = ({
   ],
   onSave = () => {},
   onManageLanguages = () => {},
+  onApiIntegration = () => {},
 }: SettingsDialogProps) => {
   const [currentSettings, setCurrentSettings] = useState(settings);
 
@@ -167,10 +170,11 @@ const SettingsDialog = ({
           value={activeTab}
           onValueChange={setActiveTab}
         >
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="display">Display</TabsTrigger>
-            <TabsTrigger value="api">API</TabsTrigger>
+            <TabsTrigger value="api">Google API</TabsTrigger>
+            <TabsTrigger value="integration">API Integration</TabsTrigger>
           </TabsList>
 
           <TabsContent value="general" className="space-y-4 py-4">
@@ -331,6 +335,34 @@ const SettingsDialog = ({
                   handleInputChange("enableAutoTranslate", checked)
                 }
               />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="integration" className="space-y-4 py-4">
+            <div className="flex items-center gap-2 mb-4">
+              <Code2 className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-medium">API Integration</h3>
+            </div>
+
+            <p className="text-sm text-muted-foreground mb-4">
+              Generate API keys to access your translation data from external
+              applications.
+            </p>
+
+            <Button onClick={onApiIntegration} className="w-full sm:w-auto">
+              Manage API Keys
+            </Button>
+
+            <div className="mt-4 p-4 border rounded-md bg-muted/30">
+              <h4 className="text-sm font-medium mb-2">
+                What you can do with the API:
+              </h4>
+              <ul className="text-sm space-y-1 list-disc list-inside">
+                <li>Access translation data from external applications</li>
+                <li>Integrate translations into your CI/CD pipeline</li>
+                <li>Build custom translation workflows</li>
+                <li>Automate translation imports and exports</li>
+              </ul>
             </div>
           </TabsContent>
         </Tabs>
