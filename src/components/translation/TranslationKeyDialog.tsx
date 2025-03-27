@@ -35,7 +35,11 @@ interface TranslationKeyDialogProps {
   };
   languages?: { code: string; name: string }[];
   onSave?: (data: any) => void;
-  onAutoTranslate?: (sourceLanguage: string, targetLanguages: string[]) => void;
+  onAutoTranslate?: (
+    sourceLanguage: string,
+    targetLanguages: string[],
+    persistToDB?: boolean,
+  ) => void;
 }
 
 const TranslationKeyDialog = ({
@@ -123,7 +127,7 @@ const TranslationKeyDialog = ({
         console.log("Auto-translating before save", { targetLanguages });
 
         // Directly call auto-translate and wait for it to complete
-        onAutoTranslate("en", targetLanguages);
+        onAutoTranslate("en", targetLanguages, true); // Set persistToDB to true
 
         // Create a promise that will resolve when translations are complete
         const translationPromise = new Promise((resolve) => {
@@ -195,7 +199,15 @@ const TranslationKeyDialog = ({
       "Manual auto-translate triggered for languages:",
       targetLanguages,
     );
-    onAutoTranslate("en", targetLanguages);
+
+    // Ensure we have base text before translating
+    if (!data.translations["en"] || data.translations["en"].trim() === "") {
+      console.error("Cannot translate without base text");
+      setIsTranslating(false);
+      return;
+    }
+
+    onAutoTranslate("en", targetLanguages, true); // Set persistToDB to true
   };
 
   const [isTranslating, setIsTranslating] = useState(false);
@@ -257,7 +269,7 @@ const TranslationKeyDialog = ({
 
   const handleConfirmAutoTranslate = () => {
     if (pendingTargetLanguages.length > 0) {
-      onAutoTranslate("en", pendingTargetLanguages);
+      onAutoTranslate("en", pendingTargetLanguages, true); // Set persistToDB to true
     }
     setShowTranslateAlert(false);
   };

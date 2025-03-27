@@ -1,7 +1,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, Filter, Download, Upload, Trash2 } from "lucide-react";
+import { Search, Plus, Trash2, Upload, Download } from "lucide-react";
 import {
   Select,
   SelectContent,

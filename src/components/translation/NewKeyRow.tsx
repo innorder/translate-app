@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Check, X } from "lucide-react";
+import { v4 as uuidv4 } from "uuid";
 
 interface NewKeyRowProps {
   keyId: string;
@@ -39,8 +40,19 @@ const NewKeyRow: React.FC<NewKeyRowProps> = ({
   }, []);
 
   const handleSave = async () => {
+    // Validate key name is not empty
+    if (!keyName || keyName.trim() === "") {
+      alert("Please enter a key name");
+      return;
+    }
+
     // Check if we have a base text (English)
     const hasBaseText = translations.en && translations.en.trim() !== "";
+    if (!hasBaseText) {
+      alert("Please enter base text (English) before saving");
+      return;
+    }
+
     console.log(
       "Checking base text for auto-translation:",
       translations.en,
@@ -135,8 +147,62 @@ const NewKeyRow: React.FC<NewKeyRowProps> = ({
       }
     }
 
+    // Import the translation key service to save the key to the database
+    try {
+      const { saveTranslationKey } = await import(
+        "@/lib/translation-key-service"
+      );
+      const { saveTranslation } = await import("@/lib/translation-client");
+
+      // Generate a proper UUID if the keyId starts with "new-"
+      const actualKeyId = keyId.startsWith("new-") ? uuidv4() : keyId;
+
+      // Validate key name is not empty
+      if (!keyName || keyName.trim() === "") {
+        console.error("Cannot save key with empty name");
+        return;
+      }
+
+      // Validate English translation is not empty
+      if (!updatedTranslations.en || updatedTranslations.en.trim() === "") {
+        console.error("Cannot save key with empty base text");
+        return;
+      }
+
+      // Save the key to the database first
+      const saveKeyResult = await saveTranslationKey({
+        id: actualKeyId,
+        key: keyName,
+        description: description || "",
+        status: "unconfirmed",
+        created_by: "user",
+      });
+
+      console.log("Key saved to database:", saveKeyResult);
+
+      // Then save each translation
+      const translationPromises = Object.entries(updatedTranslations).map(
+        ([lang, value]) => {
+          return saveTranslation({
+            key_id: actualKeyId,
+            language_code: lang,
+            value: value,
+            created_by: "user_manual_edit",
+          });
+        },
+      );
+
+      await Promise.all(translationPromises);
+      console.log("All translations saved to database");
+    } catch (error) {
+      console.error("Error saving key or translations to database:", error);
+    }
+
+    // Generate a proper UUID if the keyId starts with "new-"
+    const actualKeyId = keyId.startsWith("new-") ? uuidv4() : keyId;
+
     // Save the key with current translations (possibly updated by auto-translation)
-    onSave(keyId, {
+    onSave(actualKeyId, {
       key: keyName,
       description,
       translations: updatedTranslations,

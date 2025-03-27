@@ -7,7 +7,8 @@ interface TranslateRequest {
   sourceLanguage: string;
   targetLanguages: string[];
   text: string;
-  apiKey: string;
+  apiKey?: string;
+  projectId?: string;
 }
 
 interface TranslateResponse {
@@ -19,6 +20,37 @@ interface TranslateResponse {
 }
 
 /**
+ * Fetches the Google Translate API key from the database
+ */
+async function getApiKey(
+  projectId: string = "translation-project-123",
+): Promise<string | null> {
+  try {
+    const { createClient } = await import("@supabase/supabase-js");
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    );
+
+    const { data, error } = await supabase
+      .from("projects")
+      .select("google_translate_api_key")
+      .eq("id", projectId)
+      .single();
+
+    if (error) {
+      console.error("Error fetching API key:", error);
+      return null;
+    }
+
+    return data?.google_translate_api_key || null;
+  } catch (error) {
+    console.error("Error in getApiKey:", error);
+    return null;
+  }
+}
+
+/**
  * Translates text using Google Translate API
  */
 export async function translateText({
@@ -26,12 +58,16 @@ export async function translateText({
   targetLanguages,
   text,
   apiKey,
-}: TranslateRequest): Promise<TranslateResponse> {
-  if (!apiKey) {
+  projectId = "translation-project-123",
+}: TranslateRequest & { projectId?: string }): Promise<TranslateResponse> {
+  // If no API key is provided, try to fetch it from the database
+  const finalApiKey = apiKey || (await getApiKey(projectId));
+
+  if (!finalApiKey) {
     return {
       translations: {},
       success: false,
-      error: "API key is required",
+      error: "API key is required and could not be retrieved from the database",
     };
   }
 
@@ -47,12 +83,15 @@ export async function translateText({
     // Create a result object to store translations
     const translations: { [language: string]: string } = {};
 
+    // Always include the source language text in the translations
+    translations[sourceLanguage] = text;
+
     // For each target language, make a request to Google Translate API
     for (const targetLang of targetLanguages) {
       // Skip if target language is the same as source language
       if (targetLang === sourceLanguage) continue;
 
-      const url = `https://translation.googleapis.com/language/translate/v2?key=${apiKey}`;
+      const url = `https://translation.googleapis.com/language/translate/v2?key=${finalApiKey}`;
 
       const response = await fetch(url, {
         method: "POST",
@@ -84,7 +123,7 @@ export async function translateText({
 
     return {
       translations,
-      success: Object.keys(translations).length > 0,
+      success: Object.keys(translations).length > 1, // More than just the source language
     };
   } catch (error) {
     console.error("Translation API error:", error);
@@ -99,13 +138,17 @@ export async function translateText({
 /**
  * Tests if the API key is valid by attempting a simple translation
  */
-export async function testApiKey(apiKey: string): Promise<boolean> {
+export async function testApiKey(
+  apiKey: string,
+  projectId?: string,
+): Promise<boolean> {
   try {
     const result = await translateText({
       sourceLanguage: "en",
       targetLanguages: ["fr"],
       text: "Hello",
       apiKey,
+      projectId,
     });
 
     return result.success;

@@ -300,14 +300,82 @@ const TranslationTable: React.FC<TranslationTableProps> = ({
       onStartEditing(newId);
     };
 
+    // Handle auto-translate event with database persistence
+    const handleAutoTranslate = async (event: any) => {
+      const {
+        keyId,
+        sourceLanguage,
+        targetLanguages,
+        translations,
+        persistToDB,
+      } = event.detail;
+
+      // If we have translations and need to persist them
+      if (persistToDB && translations) {
+        const keyToUpdate = translationKeys.find((k) => k.id === keyId);
+        if (keyToUpdate) {
+          try {
+            // Import the saveTranslation function dynamically to avoid circular dependencies
+            const { saveTranslation } = await import(
+              "../../lib/translation-client"
+            );
+
+            // Save each translation to the database
+            const savePromises = [];
+            for (const [lang, value] of Object.entries(translations)) {
+              if (lang !== sourceLanguage) {
+                savePromises.push(
+                  saveTranslation({
+                    key_id: keyId,
+                    language_code: lang,
+                    value: value as string,
+                    updated_by: "system_auto_translate",
+                  }),
+                );
+              }
+            }
+
+            // Wait for all translations to be saved
+            await Promise.all(savePromises);
+
+            // Update the UI to show the translations are saved
+            const updatedKey = {
+              ...keyToUpdate,
+              translations: {
+                ...keyToUpdate.translations,
+                ...translations,
+              },
+              lastUpdated: new Date().toISOString().split("T")[0],
+              status: "unconfirmed",
+            };
+
+            // Call the edit handler with the updated key
+            onEditKey(updatedKey, true);
+
+            // Log success message
+            console.log(`Successfully saved translations for key: ${keyId}`);
+          } catch (error) {
+            console.error("Error saving translations:", error);
+          }
+        } else {
+          console.error(`Key not found for ID: ${keyId}`);
+        }
+      }
+    };
+
     document.addEventListener("start-inline-edit", handleStartInlineEdit);
     document.addEventListener("add-new-key", handleAddNewKey);
+    document.addEventListener("auto-translate-result", handleAutoTranslate);
 
     return () => {
       document.removeEventListener("start-inline-edit", handleStartInlineEdit);
       document.removeEventListener("add-new-key", handleAddNewKey);
+      document.removeEventListener(
+        "auto-translate-result",
+        handleAutoTranslate,
+      );
     };
-  }, [translationKeys]);
+  }, [translationKeys, onEditKey]);
 
   const handleSaveTranslation = (
     keyId: string,
@@ -363,7 +431,7 @@ const TranslationTable: React.FC<TranslationTableProps> = ({
   };
 
   // Handle saving a new key row
-  const handleSaveNewKey = (
+  const handleSaveNewKey = async (
     keyId: string,
     data: {
       key: string;
@@ -371,6 +439,8 @@ const TranslationTable: React.FC<TranslationTableProps> = ({
       translations: Record<string, string>;
     },
   ) => {
+    console.log("Saving new key with ID:", keyId, "and data:", data);
+
     // Create a new key object
     const newKey: TranslationKey = {
       id: keyId,
@@ -381,6 +451,54 @@ const TranslationTable: React.FC<TranslationTableProps> = ({
       status: "unconfirmed",
       translations: data.translations,
     };
+
+    try {
+      // Import the translation key service to save the key to the database
+      const { saveTranslationKey } = await import(
+        "@/lib/translation-key-service"
+      );
+      const { saveTranslation } = await import("@/lib/translation-client");
+
+      // Save the key to the database first
+      const saveKeyResult = await saveTranslationKey({
+        id: keyId,
+        key: data.key,
+        description: data.description || "",
+        status: "unconfirmed",
+        created_by: "user",
+      });
+
+      console.log(
+        "Key saved to database from TranslationTable:",
+        saveKeyResult,
+      );
+
+      // Then save each translation
+      const translationPromises = Object.entries(data.translations).map(
+        ([lang, value]) => {
+          if (value && value.trim() !== "") {
+            return saveTranslation({
+              key_id: keyId,
+              language_code: lang,
+              value: value,
+              created_by: "user_manual_edit",
+            });
+          }
+          return Promise.resolve({ success: true }); // Skip empty translations
+        },
+      );
+
+      const translationResults = await Promise.all(translationPromises);
+      console.log(
+        "All translations saved to database from TranslationTable:",
+        translationResults,
+      );
+    } catch (error) {
+      console.error(
+        "Error saving key or translations to database from TranslationTable:",
+        error,
+      );
+    }
 
     // Dispatch an event to add the new key
     const event = new CustomEvent("add-key", {
@@ -675,6 +793,12 @@ const TranslationTable: React.FC<TranslationTableProps> = ({
                             .filter((lang) => lang !== "en")
                             .map((lang) => lang);
 
+                          // Log the key ID for debugging
+                          console.log(
+                            "Attempting to translate key with ID:",
+                            key.id,
+                          );
+
                           // First ensure the English text is properly set in the state
                           if (
                             key.translations.en &&
@@ -699,6 +823,7 @@ const TranslationTable: React.FC<TranslationTableProps> = ({
                                     keyId: key.id,
                                     sourceLanguage: "en",
                                     targetLanguages,
+                                    persistToDB: true, // Add flag to indicate we want to persist to DB
                                   },
                                 },
                               );
@@ -713,6 +838,7 @@ const TranslationTable: React.FC<TranslationTableProps> = ({
                                   keyId: key.id,
                                   sourceLanguage: "en",
                                   targetLanguages,
+                                  persistToDB: true, // Add flag to indicate we want to persist to DB
                                 },
                               },
                             );

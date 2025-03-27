@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 import { Globe } from "lucide-react";
 import {
   Dialog,
@@ -30,6 +31,7 @@ interface SettingsDialogProps {
     projectName: string;
     defaultLanguage: string;
     apiKey?: string;
+    projectId?: string;
     displayDensity: "comfortable" | "compact" | "spacious";
     showDescriptions: boolean;
     enableAutoTranslate: boolean;
@@ -48,6 +50,7 @@ const SettingsDialog = ({
     projectName: "Translation Project",
     defaultLanguage: "en",
     apiKey: "",
+    projectId: "translation-project-123",
     displayDensity: "comfortable",
     showDescriptions: true,
     enableAutoTranslate: true,
@@ -67,16 +70,31 @@ const SettingsDialog = ({
 }: SettingsDialogProps) => {
   const [currentSettings, setCurrentSettings] = useState(settings);
 
-  // Load API key from localStorage on mount
+  // Load API key from Supabase on mount
   useEffect(() => {
-    const savedApiKey = localStorage.getItem("translationApiKey");
-    if (savedApiKey) {
-      setCurrentSettings((prev) => ({
-        ...prev,
-        apiKey: savedApiKey,
-      }));
-    }
-  }, []);
+    const fetchApiKey = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("projects")
+          .select("google_translate_api_key")
+          .eq("id", settings.projectId || "translation-project-123")
+          .single();
+
+        if (error) throw error;
+
+        if (data?.google_translate_api_key) {
+          setCurrentSettings((prev) => ({
+            ...prev,
+            apiKey: data.google_translate_api_key,
+          }));
+        }
+      } catch (error) {
+        console.error("Error fetching API key:", error);
+      }
+    };
+
+    fetchApiKey();
+  }, [settings.projectId]);
   const [activeTab, setActiveTab] = useState("general");
 
   const handleInputChange = (field: string, value: any) => {
@@ -100,10 +118,21 @@ const SettingsDialog = ({
     }
   };
 
-  const handleSave = () => {
-    // Save API key to localStorage if provided
+  const handleSave = async () => {
+    // Save API key to Supabase if provided
     if (currentSettings.apiKey) {
-      localStorage.setItem("translationApiKey", currentSettings.apiKey);
+      try {
+        const { error } = await supabase
+          .from("projects")
+          .update({ google_translate_api_key: currentSettings.apiKey })
+          .eq("id", settings.projectId || "translation-project-123");
+
+        if (error) throw error;
+      } catch (error) {
+        console.error("Error saving API key:", error);
+        alert("Failed to save API key to the database. Please try again.");
+        return;
+      }
     }
 
     // Save auto-translate setting

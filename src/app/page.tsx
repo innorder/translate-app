@@ -59,116 +59,175 @@ export default function TranslationDashboard() {
   const [editingKey, setEditingKey] = useState<string | null>(null);
 
   // State for all translation keys
-  const [translationKeys, setTranslationKeys] = useState<TranslationKey[]>([
-    {
-      id: "1",
-      key: "welcome.message",
-      description: "Welcome message on homepage",
-      lastUpdated: "2023-10-15",
-      status: "confirmed",
-      translations: {
-        en: "Welcome to our application",
-        fr: "Bienvenue dans notre application",
-        es: "Bienvenido a nuestra aplicación",
-        de: "Willkommen in unserer Anwendung",
-      },
-      history: [
-        { action: "Created", user: "John Doe", timestamp: "2023-10-01" },
-        {
-          action: "Updated French translation",
-          user: "Marie Dupont",
-          timestamp: "2023-10-10",
-        },
-        {
-          action: "Updated Spanish translation",
-          user: "Carlos Rodriguez",
-          timestamp: "2023-10-15",
-        },
-      ],
-    },
-    {
-      id: "2",
-      key: "button.submit",
-      description: "Submit button text",
-      lastUpdated: "2023-10-10",
-      status: "confirmed",
-      translations: {
-        en: "Submit",
-        fr: "Soumettre",
-        es: "Enviar",
-        de: "Einreichen",
-      },
-      history: [
-        { action: "Created", user: "John Doe", timestamp: "2023-09-25" },
-        {
-          action: "Updated all translations",
-          user: "John Doe",
-          timestamp: "2023-10-10",
-        },
-      ],
-    },
-    {
-      id: "3",
-      key: "error.required",
-      description: "Error message for required fields",
-      lastUpdated: "2023-09-28",
-      status: "unconfirmed",
-      translations: {
-        en: "This field is required",
-        fr: "Ce champ est obligatoire",
-        es: "",
-        de: "Dieses Feld ist erforderlich",
-      },
-      history: [
-        { action: "Created", user: "Sarah Williams", timestamp: "2023-09-28" },
-      ],
-    },
-    {
-      id: "4",
-      key: "nav.home",
-      description: "Navigation label for home",
-      lastUpdated: "2023-09-20",
-      status: "unconfirmed",
-      translations: {
-        en: "Home",
-        fr: "Accueil",
-        es: "Inicio",
-        de: "Startseite",
-      },
-      history: [
-        { action: "Created", user: "Alex Johnson", timestamp: "2023-09-15" },
-        {
-          action: "Marked as outdated",
-          user: "John Doe",
-          timestamp: "2023-09-20",
-        },
-      ],
-    },
-    {
-      id: "5",
-      key: "nav.settings",
-      description: "Navigation label for settings",
-      lastUpdated: "2023-09-15",
-      status: "confirmed",
-      translations: {
-        en: "Settings",
-        fr: "Paramètres",
-        es: "Configuración",
-        de: "Einstellungen",
-      },
-      history: [
-        { action: "Created", user: "Alex Johnson", timestamp: "2023-09-15" },
-      ],
-    },
-  ]);
+  const [translationKeys, setTranslationKeys] = useState<TranslationKey[]>([]);
+
+  // Load translation keys and their translations from database
+  useEffect(() => {
+    const loadTranslationsAndKeys = async () => {
+      try {
+        console.log(
+          "Starting to load translation keys and translations from database",
+        );
+
+        // Clear any stale data first
+        setTranslationKeys([]);
+
+        // First load translation keys
+        const { fetchTranslationKeys } = await import(
+          "@/lib/translation-key-service"
+        );
+        const { success: keysSuccess, data: keysData } =
+          await fetchTranslationKeys();
+
+        console.log("Translation keys fetch result:", {
+          success: keysSuccess,
+          count: keysData?.length,
+        });
+
+        let dbKeys = [];
+        if (keysSuccess && keysData && keysData.length > 0) {
+          dbKeys = keysData.map((key) => ({
+            id: key.id,
+            key: key.key,
+            description: key.description || "",
+            lastUpdated: key.updated_at
+              ? new Date(key.updated_at).toISOString().split("T")[0]
+              : new Date().toISOString().split("T")[0],
+            status: key.status as "confirmed" | "unconfirmed",
+            translations: {},
+          }));
+
+          console.log("Processed keys from database:", dbKeys.length);
+        } else {
+          console.log("No translation keys found in database");
+        }
+
+        // Then load translations
+        const { fetchAllTranslations } = await import(
+          "@/lib/translation-client"
+        );
+        const { success, data } = await fetchAllTranslations();
+
+        console.log("Translations fetch result:", {
+          success,
+          count: data?.length,
+        });
+
+        if (success && data) {
+          // Group translations by key_id
+          const translationsByKeyId = data.reduce((acc, translation) => {
+            if (!acc[translation.key_id]) {
+              acc[translation.key_id] = {};
+            }
+            acc[translation.key_id][translation.language_code] =
+              translation.value;
+            return acc;
+          }, {});
+
+          console.log(
+            "Grouped translations by key_id, found translations for",
+            Object.keys(translationsByKeyId).length,
+            "keys",
+          );
+
+          // If we have database keys, use them and add translations
+          if (dbKeys.length > 0) {
+            const keysWithTranslations = dbKeys.map((key) => {
+              if (translationsByKeyId[key.id]) {
+                return {
+                  ...key,
+                  translations: translationsByKeyId[key.id],
+                };
+              }
+              return key;
+            });
+
+            setTranslationKeys(keysWithTranslations);
+            console.log(
+              "Loaded",
+              keysWithTranslations.length,
+              "keys from database with their translations",
+            );
+            return; // Skip loading mock data
+          } else {
+            // If no database keys, update mock data with translations
+            setTranslationKeys((prevKeys) => {
+              return prevKeys.map((key) => {
+                if (translationsByKeyId[key.id]) {
+                  return {
+                    ...key,
+                    translations: {
+                      ...key.translations,
+                      ...translationsByKeyId[key.id],
+                    },
+                  };
+                }
+                return key;
+              });
+            });
+            console.log(
+              "No database keys found, updated mock data with translations",
+            );
+          }
+        } else {
+          console.log("No translations found in database");
+          if (dbKeys.length > 0) {
+            setTranslationKeys(dbKeys);
+            console.log(
+              "Loaded",
+              dbKeys.length,
+              "keys from database without translations",
+            );
+          }
+        }
+      } catch (error) {
+        console.error("Error loading translations and keys:", error);
+      }
+    };
+
+    // Set initial loading state
+    setTranslationKeys([]);
+    console.log(
+      "Initial state set to empty array, loading data from database...",
+    );
+
+    // Load translations and keys from database
+    loadTranslationsAndKeys();
+  }, []);
 
   // State for languages
-  const [languages, setLanguages] = useState<{ code: string; name: string }[]>([
+  const [languages, setLanguages] = useState<
+    { code: string; name: string; id?: string }[]
+  >([
     { code: "en", name: "English" },
     { code: "fr", name: "French" },
     { code: "es", name: "Spanish" },
     { code: "de", name: "German" },
   ]);
+
+  // Load languages from database on initial render
+  useEffect(() => {
+    const loadLanguages = async () => {
+      try {
+        const { fetchLanguages } = await import("@/lib/language-service");
+        const { success, data } = await fetchLanguages();
+
+        if (success && data && data.length > 0) {
+          // Transform to the expected format
+          const dbLanguages = data.map((lang) => ({
+            code: lang.code,
+            name: lang.name,
+            id: lang.id,
+          }));
+          setLanguages(dbLanguages);
+        }
+      } catch (error) {
+        console.error("Error loading languages:", error);
+      }
+    };
+
+    loadLanguages();
+  }, []);
 
   // State for search query
   const [searchQuery, setSearchQuery] = useState("");
@@ -277,14 +336,7 @@ export default function TranslationDashboard() {
 
       if (newLanguages && newLanguages.length > 0) {
         // Auto-translate all keys for the new languages
-        const apiKey = localStorage.getItem("translationApiKey");
-
-        if (!apiKey) {
-          alert(
-            "Please add a Google Translate API key in Settings > API to auto-translate new languages",
-          );
-          return;
-        }
+        // We'll use the translation-api's built-in API key fetching
 
         // Show loading message
         alert(
@@ -303,7 +355,7 @@ export default function TranslationDashboard() {
               sourceLanguage: "en",
               targetLanguages: newLanguages,
               text: key.translations.en,
-              apiKey,
+              projectId: "translation-project-123", // Use the project ID to fetch the API key
             });
 
             if (result.success) {
@@ -348,7 +400,7 @@ export default function TranslationDashboard() {
   };
 
   const handleSaveLanguages = (
-    updatedLanguages: { code: string; name: string }[],
+    updatedLanguages: { code: string; name: string; id?: string }[],
   ) => {
     setLanguages(updatedLanguages);
     console.log("Languages updated:", updatedLanguages);
@@ -356,8 +408,15 @@ export default function TranslationDashboard() {
 
   // Handle translation key actions
   const handleAddKey = () => {
-    // Dispatch an event to create a new key row
-    document.dispatchEvent(new CustomEvent("add-new-key"));
+    // Import the translation key service and uuid
+    import("uuid").then(({ v4: uuidv4 }) => {
+      // Dispatch an event to create a new key row with a proper UUID
+      document.dispatchEvent(
+        new CustomEvent("add-new-key", {
+          detail: { id: uuidv4() },
+        }),
+      );
+    });
   };
 
   const handleEditKey = (key: TranslationKey, isInlineEdit = false) => {
@@ -378,6 +437,12 @@ export default function TranslationDashboard() {
 
     // Record deletion in database history
     try {
+      // Delete the key from the database
+      const { deleteTranslationKey } = await import(
+        "@/lib/translation-key-service"
+      );
+      await deleteTranslationKey(key.id);
+
       await recordHistory({
         key_id: key.id,
         action: "Deleted key",
@@ -413,9 +478,14 @@ export default function TranslationDashboard() {
 
   // Listen for confirm-translations events
   React.useEffect(() => {
-    const handleConfirmTranslations = (event: any) => {
+    const handleConfirmTranslations = async (event: any) => {
       const { keyId } = event.detail;
       if (keyId) {
+        // Import the translation key service
+        const { saveTranslationKey } = await import(
+          "@/lib/translation-key-service"
+        );
+
         setTranslationKeys((prevKeys) =>
           prevKeys.map((key) => {
             if (key.id === keyId) {
@@ -425,6 +495,15 @@ export default function TranslationDashboard() {
                 status: "confirmed",
                 lastUpdated: new Date().toISOString().split("T")[0],
               };
+
+              // Update status in database
+              saveTranslationKey({
+                id: keyId,
+                key: key.key,
+                description: key.description || "",
+                status: "confirmed",
+                updated_by: "user",
+              });
 
               // Record history in database
               recordHistory({
@@ -478,10 +557,41 @@ export default function TranslationDashboard() {
       }
     };
 
-    const handleAddKeyEvent = (event: any) => {
+    const handleAddKeyEvent = async (event: any) => {
       if (event.detail && event.detail.key) {
         let newKey = event.detail.key;
         const keyId = newKey.id;
+
+        console.log("Adding new key to state:", newKey);
+
+        // Validate key has required fields
+        if (!newKey.key || newKey.key.trim() === "") {
+          console.error("Cannot add key with empty name");
+          return;
+        }
+
+        if (
+          !newKey.translations ||
+          !newKey.translations.en ||
+          newKey.translations.en.trim() === ""
+        ) {
+          console.error("Cannot add key with empty base text");
+          return;
+        }
+
+        // Save the new key to the database
+        const { saveTranslationKey } = await import(
+          "@/lib/translation-key-service"
+        );
+        const saveResult = await saveTranslationKey({
+          id: keyId,
+          key: newKey.key,
+          description: newKey.description || "",
+          status: newKey.status || "unconfirmed",
+          created_by: "user",
+        });
+
+        console.log("Save translation key result:", saveResult);
 
         // Check if we have pending translations for this key
         const pendingTranslationsListener = (e: any) => {
@@ -518,7 +628,19 @@ export default function TranslationDashboard() {
         );
 
         // Add the new key to the state
-        setTranslationKeys((prevKeys) => [newKey, ...prevKeys]);
+        setTranslationKeys((prevKeys) => {
+          // Check if key already exists to prevent duplicates
+          const exists = prevKeys.some(
+            (k) => k.id === newKey.id || k.key === newKey.key,
+          );
+          if (exists) {
+            console.log("Key already exists, updating instead of adding");
+            return prevKeys.map((k) =>
+              k.id === newKey.id || k.key === newKey.key ? newKey : k,
+            );
+          }
+          return [newKey, ...prevKeys];
+        });
       }
     };
 
@@ -657,6 +779,11 @@ export default function TranslationDashboard() {
   };
 
   const handleUpdateKey = async (keyId: string, field: string, value: any) => {
+    // Import the translation client and key service
+    const { saveTranslation } = await import("@/lib/translation-client");
+    const { saveTranslationKey } = await import(
+      "@/lib/translation-key-service"
+    );
     console.log(`Update key ${keyId}, field ${field}, value:`, value);
     const currentDate = new Date().toISOString().split("T")[0];
 
@@ -692,14 +819,47 @@ export default function TranslationDashboard() {
 
         if (field === "key") {
           updatedKey.key = value;
+          // Save key update to database
+          saveTranslationKey({
+            id: keyId,
+            key: value,
+            description: updatedKey.description || "",
+            status: updatedKey.status,
+            updated_by: "user",
+          });
         } else if (field === "description") {
           updatedKey.description = value;
+          // Save description update to database
+          saveTranslationKey({
+            id: keyId,
+            key: updatedKey.key,
+            description: value,
+            status: updatedKey.status,
+            updated_by: "user",
+          });
         } else if (field.startsWith("translation_")) {
           const lang = field.replace("translation_", "");
           updatedKey.translations = { ...key.translations, [lang]: value };
 
           // Any update to translations sets status to unconfirmed
           updatedKey.status = "unconfirmed";
+
+          // Update status in database
+          saveTranslationKey({
+            id: keyId,
+            key: updatedKey.key,
+            description: updatedKey.description || "",
+            status: "unconfirmed",
+            updated_by: "user",
+          });
+
+          // Save translation to database
+          saveTranslation({
+            key_id: keyId,
+            language_code: lang,
+            value: value,
+            updated_by: "user_manual_edit",
+          });
         }
 
         // Add to local history
@@ -741,6 +901,8 @@ export default function TranslationDashboard() {
     targetLanguages: string[],
     keyId?: string,
   ) => {
+    // Import the translation client
+    const { saveTranslation } = await import("@/lib/translation-client");
     console.log(
       "Auto translate from",
       sourceLanguage,
@@ -750,17 +912,8 @@ export default function TranslationDashboard() {
       keyId,
     );
 
-    // Get the API key from settings
-    const apiKey =
-      typeof window !== "undefined"
-        ? localStorage.getItem("translationApiKey")
-        : null;
-    if (!apiKey) {
-      console.warn("No translation API key found");
-      alert("Please add a Google Translate API key in Settings > API first");
-      setSettingsOpen(true);
-      return;
-    }
+    // We'll use the translation-api's built-in API key fetching
+    // No need to get it from localStorage anymore
 
     try {
       // Import the translation API dynamically
@@ -925,7 +1078,7 @@ export default function TranslationDashboard() {
         sourceLanguage: "en",
         targetLanguages,
         text: sourceText,
-        apiKey,
+        projectId: "translation-project-123", // Use the project ID to fetch the API key
       });
 
       if (result.success) {
@@ -935,6 +1088,19 @@ export default function TranslationDashboard() {
           ":",
           result.translations,
         );
+
+        // Save translations to database
+        if (keyId) {
+          for (const [langCode, value] of Object.entries(result.translations)) {
+            await saveTranslation({
+              key_id: keyId,
+              language_code: langCode,
+              value: value,
+              updated_by: "system_auto_translate",
+            });
+          }
+        }
+
         // Dispatch event with translations and key ID
         const event = new CustomEvent("auto-translate-complete", {
           detail: {
@@ -998,17 +1164,9 @@ export default function TranslationDashboard() {
               onDeleteSelected={handleDeleteSelected}
               selectedCount={selectedKeys.length}
               onFilterChange={handleFilterChange}
+              onImport={handleImport}
+              onExport={handleExport}
             />
-            <div className="flex items-center space-x-2">
-              <Button variant="outline" onClick={handleImport}>
-                <Upload className="h-4 w-4 mr-2" />
-                Import
-              </Button>
-              <Button variant="outline" onClick={handleExport}>
-                <Download className="h-4 w-4 mr-2" />
-                Export
-              </Button>
-            </div>
           </div>
 
           {/* Translation Table */}
