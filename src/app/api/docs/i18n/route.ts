@@ -119,29 +119,26 @@ export default function ClientComponent() {
 \`\`\`tsx
 import { headers } from 'next/headers';
 
-async function getTranslations(locale: string) {
-  try {
-    const res = await fetch(
-      \`https://your-translation-app.com/api/translations?locale=\${locale}\`,
-      {
-        headers: {
-          'Authorization': \`Bearer \${process.env.TRANSLATION_API_KEY}\`,
-          'Project-ID': 'your-project-id',
-        },
-        next: { revalidate: 3600 }, // Cache for 1 hour
-      }
-    );
-
-    if (!res.ok) {
-      throw new Error('Failed to fetch translations');
-    }
-
-    return res.json();
-  } catch (error) {
-    console.error('Error fetching translations:', error);
-    return {};
+// This is a code example for documentation purposes only
+const getTranslationsExample = (locale) => {
+  // Example code showing how to fetch translations
+  return {
+    code: \`
+const res = await fetch(
+  \\\`https://your-translation-app.com/api/translations?locale=\\\${locale}\\\`,
+  {
+    headers: {
+      'Authorization': \\\`Bearer \\\${process.env.TRANSLATION_API_KEY}\\\`,
+      'Project-ID': 'your-project-id',
+    },
+    next: { revalidate: 3600 }, // Cache for 1 hour
   }
-}
+);
+
+return res.json();
+\`
+  };
+};
 
 export default async function ServerComponent() {
   const headersList = headers();

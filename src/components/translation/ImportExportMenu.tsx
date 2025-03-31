@@ -62,7 +62,7 @@ const ImportExportMenu = ({
   },
   onImportComplete = () => {},
 }: ImportExportMenuProps) => {
-  const [activeTab, setActiveTab] = useState("export");
+  const [activeTab, setActiveTab] = useState("import");
   const [exportFormat, setExportFormat] = useState("json");
   const [importFormat, setImportFormat] = useState("json");
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -88,6 +88,9 @@ const ImportExportMenu = ({
       setSelectedLanguages((prevSelected) => [...prevSelected, code]);
     }
   };
+
+  const [selectedLanguage, setSelectedLanguage] = useState<string>("en");
+  const [importMode, setImportMode] = useState<"multi" | "single">("single");
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
@@ -116,23 +119,74 @@ const ImportExportMenu = ({
             // Count keys and detect languages
             keyCount = Object.keys(parsedData).length;
 
-            // Get languages from the first entry
-            if (keyCount > 0) {
-              const firstKey = Object.keys(parsedData)[0];
-              if (
-                parsedData[firstKey] &&
-                typeof parsedData[firstKey] === "object"
-              ) {
-                detectedLanguages = Object.keys(parsedData[firstKey]);
-              }
+            // Handle single-language JSON file (where each key maps directly to a translation)
+            if (importMode === "single") {
+              // Transform the data to match our expected format
+              const transformedData: Record<
+                string,
+                Record<string, string>
+              > = {};
+
+              // For each key in the file, create an entry with the selected language
+              Object.keys(parsedData).forEach((key) => {
+                transformedData[key] = {
+                  [selectedLanguage]: parsedData[key],
+                };
+              });
+
+              parsedData = transformedData;
+              detectedLanguages = [selectedLanguage];
 
               // Get sample entries (up to 3)
               const sampleKeys = Object.keys(parsedData).slice(0, 3);
               sampleKeys.forEach((key) => {
-                if (parsedData[key].en) {
-                  sampleEntries[key] = parsedData[key].en;
-                }
+                sampleEntries[key] = parsedData[key][selectedLanguage];
               });
+
+              // If this is English, mark it as base text for auto-translation
+              if (selectedLanguage === "en") {
+                console.log(
+                  "Detected English single-language import - will be used as base text",
+                );
+
+                // For single-language imports where the language is English,
+                // we need to handle both direct string values and object values
+                Object.keys(parsedData).forEach((key) => {
+                  // If the value is a direct string, convert it to an object with 'en' key
+                  if (typeof parsedData[key] === "string") {
+                    const value = parsedData[key];
+                    parsedData[key] = { en: value };
+                  }
+                  // If it's an object but doesn't have the 'en' key, add it
+                  else if (
+                    parsedData[key] &&
+                    typeof parsedData[key] === "object" &&
+                    !parsedData[key].en
+                  ) {
+                    parsedData[key].en = parsedData[key][selectedLanguage];
+                  }
+                });
+              }
+            } else {
+              // Multi-language JSON format (standard format)
+              // Get languages from the first entry
+              if (keyCount > 0) {
+                const firstKey = Object.keys(parsedData)[0];
+                if (
+                  parsedData[firstKey] &&
+                  typeof parsedData[firstKey] === "object"
+                ) {
+                  detectedLanguages = Object.keys(parsedData[firstKey]);
+                }
+
+                // Get sample entries (up to 3)
+                const sampleKeys = Object.keys(parsedData).slice(0, 3);
+                sampleKeys.forEach((key) => {
+                  if (parsedData[key].en) {
+                    sampleEntries[key] = parsedData[key].en;
+                  }
+                });
+              }
             }
           } else if (importFormat === "csv") {
             // Basic CSV parsing
@@ -347,10 +401,60 @@ const ImportExportMenu = ({
 
       // Convert to the format expected by the application
       const processedData = Object.keys(importedData).map((key, index) => {
+        // Ensure translations is an object with string values
+        const processedTranslations = {};
         const translations = importedData[key];
-        const allLanguagesPresent = previewData.languages.every(
-          (lang) => translations[lang] && translations[lang].trim() !== "",
-        );
+
+        // Handle single-language JSON imports for English
+        if (importMode === "single" && selectedLanguage === "en") {
+          // If this is a direct string value, convert it to an object with English as the base text
+          if (typeof translations === "string") {
+            processedTranslations.en = translations;
+          } else if (translations && typeof translations === "object") {
+            // If it's already an object, ensure it has the 'en' key
+            Object.keys(translations).forEach((lang) => {
+              // Convert any non-string values to strings
+              if (
+                translations[lang] !== null &&
+                translations[lang] !== undefined
+              ) {
+                processedTranslations[lang] =
+                  typeof translations[lang] === "string"
+                    ? translations[lang]
+                    : JSON.stringify(translations[lang]);
+              } else {
+                processedTranslations[lang] = "";
+              }
+            });
+
+            // Ensure English is set as the base text
+            if (!processedTranslations.en && translations[selectedLanguage]) {
+              processedTranslations.en = translations[selectedLanguage];
+            }
+          }
+        } else {
+          // For non-English or multi-language imports
+          Object.keys(translations).forEach((lang) => {
+            // Convert any non-string values to strings
+            if (
+              translations[lang] !== null &&
+              translations[lang] !== undefined
+            ) {
+              processedTranslations[lang] =
+                typeof translations[lang] === "string"
+                  ? translations[lang]
+                  : JSON.stringify(translations[lang]);
+            } else {
+              processedTranslations[lang] = "";
+            }
+          });
+        }
+
+        const allLanguagesPresent =
+          Object.keys(processedTranslations).length > 0 &&
+          processedTranslations.en &&
+          typeof processedTranslations.en === "string" &&
+          processedTranslations.en.trim() !== "";
 
         return {
           id: `imported_${index}_${Date.now()}`,
@@ -358,7 +462,10 @@ const ImportExportMenu = ({
           description: "", // No description in import file
           lastUpdated: now,
           status: allLanguagesPresent ? "complete" : "incomplete",
-          translations: translations,
+          translations: processedTranslations,
+          // Add a flag to indicate this is from a single-language import if applicable
+          singleLanguageImport:
+            importMode === "single" ? selectedLanguage : undefined,
         };
       });
 
@@ -397,13 +504,13 @@ const ImportExportMenu = ({
           value={activeTab}
         >
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="export" className="flex items-center gap-2">
-              <Download size={16} />
-              Export
-            </TabsTrigger>
             <TabsTrigger value="import" className="flex items-center gap-2">
               <Upload size={16} />
               Import
+            </TabsTrigger>
+            <TabsTrigger value="export" className="flex items-center gap-2">
+              <Download size={16} />
+              Export
             </TabsTrigger>
           </TabsList>
 
@@ -512,6 +619,69 @@ const ImportExportMenu = ({
                   </SelectContent>
                 </Select>
               </div>
+
+              {importFormat === "json" && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    JSON Import Mode
+                  </label>
+                  <div className="flex flex-col space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="multi-language"
+                        checked={importMode === "multi"}
+                        onCheckedChange={() => setImportMode("multi")}
+                      />
+                      <label htmlFor="multi-language" className="text-sm">
+                        Multi-language JSON (keys with nested language objects)
+                      </label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="single-language"
+                        checked={importMode === "single"}
+                        onCheckedChange={() => setImportMode("single")}
+                      />
+                      <label htmlFor="single-language" className="text-sm">
+                        Single-language JSON (direct key-value pairs)
+                      </label>
+                    </div>
+                  </div>
+                  <div className="mt-2 p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md">
+                    <p className="text-xs text-amber-800 dark:text-amber-300 flex items-center">
+                      <AlertTriangle className="h-3 w-3 mr-1 flex-shrink-0" />
+                      For files like{" "}
+                      <code className="mx-1 px-1 bg-amber-100 dark:bg-amber-900 rounded">
+                        "key": "value"
+                      </code>{" "}
+                      format, select "Single-language JSON" mode
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {importFormat === "json" && importMode === "single" && (
+                <div>
+                  <label className="text-sm font-medium">
+                    Language for this file
+                  </label>
+                  <Select
+                    value={selectedLanguage}
+                    onValueChange={setSelectedLanguage}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select language" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {translationData.languages.map((lang) => (
+                        <SelectItem key={lang.code} value={lang.code}>
+                          {lang.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {error && (
                 <Alert variant="destructive" className="mb-4">

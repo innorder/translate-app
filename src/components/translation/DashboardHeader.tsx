@@ -1,7 +1,10 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { Settings, Upload, Download, Plus, Globe, Key } from "lucide-react";
+import { Settings, Upload, Download, Plus, Globe, User } from "lucide-react";
 import { ThemeSwitcher } from "@/components/theme-switcher";
+import LogoutButton from "@/components/auth/LogoutButton";
+import { supabase } from "@/lib/supabase";
+import { useEffect, useState } from "react";
 
 interface DashboardHeaderProps {
   onCreateNamespace?: () => void;
@@ -9,7 +12,6 @@ interface DashboardHeaderProps {
   onExport?: () => void;
   onSettingsOpen?: () => void;
   onManageLanguages?: () => void;
-  onApiIntegration?: () => void;
   projectName?: string;
 }
 
@@ -19,9 +21,21 @@ const DashboardHeader = ({
   onExport = () => {},
   onSettingsOpen = () => {},
   onManageLanguages = () => {},
-  onApiIntegration = () => {},
   projectName = "Translation Project",
 }: DashboardHeaderProps) => {
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  // Use the supabase client directly
+
+  useEffect(() => {
+    const getUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      if (data?.user) {
+        setUserEmail(data.user.email);
+      }
+    };
+    getUser();
+  }, [supabase]);
+
   return (
     <header className="w-full h-20 bg-background border-b border-border flex items-center justify-between px-6 sticky top-0 z-10">
       <div className="flex items-center space-x-4">
@@ -44,27 +58,21 @@ const DashboardHeader = ({
           Languages
         </Button>
 
-        <Button variant="outline" onClick={onImport}>
-          <Upload className="h-4 w-4 mr-2" />
-          Import
-        </Button>
-
-        <Button variant="outline" onClick={onExport}>
-          <Download className="h-4 w-4 mr-2" />
-          Export
-        </Button>
-
-        <Button variant="outline" onClick={onApiIntegration}>
-          <Key className="h-4 w-4 mr-2" />
-          API
-        </Button>
-
         <Button variant="ghost" size="icon" onClick={onSettingsOpen}>
           <Settings className="h-5 w-5" />
           <span className="sr-only">Settings</span>
         </Button>
 
         <ThemeSwitcher />
+
+        {userEmail && (
+          <Button variant="outline" size="sm">
+            <User className="h-4 w-4 mr-2" />
+            {userEmail.split("@")[0]}
+          </Button>
+        )}
+
+        <LogoutButton variant="ghost" size="sm" showIcon={true} />
       </div>
     </header>
   );

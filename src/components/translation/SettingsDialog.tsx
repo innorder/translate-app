@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 import { Globe } from "lucide-react";
 import {
   Dialog,
@@ -12,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Code2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -29,6 +31,7 @@ interface SettingsDialogProps {
     projectName: string;
     defaultLanguage: string;
     apiKey?: string;
+    projectId?: string;
     displayDensity: "comfortable" | "compact" | "spacious";
     showDescriptions: boolean;
     enableAutoTranslate: boolean;
@@ -37,6 +40,7 @@ interface SettingsDialogProps {
   languages?: { code: string; name: string }[];
   onSave?: (settings: any) => void;
   onManageLanguages?: () => void;
+  onApiIntegration?: () => void;
 }
 
 const SettingsDialog = ({
@@ -46,6 +50,7 @@ const SettingsDialog = ({
     projectName: "Translation Project",
     defaultLanguage: "en",
     apiKey: "",
+    projectId: "translation-project-123",
     displayDensity: "comfortable",
     showDescriptions: true,
     enableAutoTranslate: true,
@@ -61,19 +66,35 @@ const SettingsDialog = ({
   ],
   onSave = () => {},
   onManageLanguages = () => {},
+  onApiIntegration = () => {},
 }: SettingsDialogProps) => {
   const [currentSettings, setCurrentSettings] = useState(settings);
 
-  // Load API key from localStorage on mount
+  // Load API key from Supabase on mount
   useEffect(() => {
-    const savedApiKey = localStorage.getItem("translationApiKey");
-    if (savedApiKey) {
-      setCurrentSettings((prev) => ({
-        ...prev,
-        apiKey: savedApiKey,
-      }));
-    }
-  }, []);
+    const fetchApiKey = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("projects")
+          .select("google_translate_api_key")
+          .eq("id", settings.projectId || "translation-project-123")
+          .single();
+
+        if (error) throw error;
+
+        if (data?.google_translate_api_key) {
+          setCurrentSettings((prev) => ({
+            ...prev,
+            apiKey: data.google_translate_api_key,
+          }));
+        }
+      } catch (error) {
+        console.error("Error fetching API key:", error);
+      }
+    };
+
+    fetchApiKey();
+  }, [settings.projectId]);
   const [activeTab, setActiveTab] = useState("general");
 
   const handleInputChange = (field: string, value: any) => {
@@ -97,10 +118,21 @@ const SettingsDialog = ({
     }
   };
 
-  const handleSave = () => {
-    // Save API key to localStorage if provided
+  const handleSave = async () => {
+    // Save API key to Supabase if provided
     if (currentSettings.apiKey) {
-      localStorage.setItem("translationApiKey", currentSettings.apiKey);
+      try {
+        const { error } = await supabase
+          .from("projects")
+          .update({ google_translate_api_key: currentSettings.apiKey })
+          .eq("id", settings.projectId || "translation-project-123");
+
+        if (error) throw error;
+      } catch (error) {
+        console.error("Error saving API key:", error);
+        alert("Failed to save API key to the database. Please try again.");
+        return;
+      }
     }
 
     // Save auto-translate setting
@@ -167,10 +199,11 @@ const SettingsDialog = ({
           value={activeTab}
           onValueChange={setActiveTab}
         >
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="display">Display</TabsTrigger>
-            <TabsTrigger value="api">API</TabsTrigger>
+            <TabsTrigger value="api">Google API</TabsTrigger>
+            <TabsTrigger value="integration">API Integration</TabsTrigger>
           </TabsList>
 
           <TabsContent value="general" className="space-y-4 py-4">
@@ -331,6 +364,34 @@ const SettingsDialog = ({
                   handleInputChange("enableAutoTranslate", checked)
                 }
               />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="integration" className="space-y-4 py-4">
+            <div className="flex items-center gap-2 mb-4">
+              <Code2 className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-medium">API Integration</h3>
+            </div>
+
+            <p className="text-sm text-muted-foreground mb-4">
+              Generate API keys to access your translation data from external
+              applications.
+            </p>
+
+            <Button onClick={onApiIntegration} className="w-full sm:w-auto">
+              Manage API Keys
+            </Button>
+
+            <div className="mt-4 p-4 border rounded-md bg-muted/30">
+              <h4 className="text-sm font-medium mb-2">
+                What you can do with the API:
+              </h4>
+              <ul className="text-sm space-y-1 list-disc list-inside">
+                <li>Access translation data from external applications</li>
+                <li>Integrate translations into your CI/CD pipeline</li>
+                <li>Build custom translation workflows</li>
+                <li>Automate translation imports and exports</li>
+              </ul>
             </div>
           </TabsContent>
         </Tabs>

@@ -52,6 +52,7 @@ const TranslationGrid: React.FC<TranslationGridProps> = ({
   onSelectKeys = () => {},
 }) => {
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  console.log("hi");
 
   const handleSelectKey = (id: string, checked: boolean) => {
     const newSelectedKeys = checked

@@ -1,0 +1,23 @@
+# Ignore files that might cause issues with Vercel deployment
+.git
+.github
+.next
+node_modules
+
+# Ignore Tempo-specific files
+tempobook
+**/tempobook/**
+
+# Ignore development files
+.env.local
+.env.development
+.env.development.local
+
+# Ignore test files
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+
+# Ignore backup files
+next.config.original.js
