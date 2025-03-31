@@ -6,7 +6,8 @@ import { NextResponse } from "next/server";
 export async function GET() {
   return NextResponse.json({
     title: "Translation Management i18n Integration",
-    description: "How to use the Translation Management App like i18next in your applications",
+    description:
+      "How to use the Translation Management App like i18next in your applications",
     instructions: {
       setup: `
 # Translation Management i18n Integration
@@ -115,20 +116,26 @@ export default function ClientComponent() {
 \`\`\`jsx
 import { headers } from 'next/headers';
 
-async function getTranslations(locale) {
-  const res = await fetch(
-    `https://your-translation-app.com/api/translations?locale=${locale}`,
-    {
-      headers: {
-        'Authorization': `Bearer ${process.env.TRANSLATION_API_KEY}`,
-        'Project-ID': 'your-project-id',
-      },
-      next: { revalidate: 3600 }, // Cache for 1 hour
-    }
-  );
-  
-  return res.json();
-}
+// This is a code example for documentation purposes only
+const getTranslationsExample = (locale) => {
+  // Example code showing how to fetch translations
+  return {
+    code: \`
+const res = await fetch(
+  \\\`https://your-translation-app.com/api/translations?locale=\\\${locale}\\\`,
+  {
+    headers: {
+      'Authorization': \\\`Bearer \\\${process.env.TRANSLATION_API_KEY}\\\`,
+      'Project-ID': 'your-project-id',
+    },
+    next: { revalidate: 3600 }, // Cache for 1 hour
+  }
+);
+
+return res.json();
+\`
+  };
+};
 
 export default async function ServerComponent() {
   const headersList = headers();
@@ -141,7 +148,7 @@ export default async function ServerComponent() {
     
     let text = translations[key];
     Object.entries(params).forEach(([paramName, value]) => {
-      text = text.replace(new RegExp(`{{${paramName}}}`, 'g'), value);
+      text = text.replace(new RegExp(\`{{\${paramName}}}\`, 'g'), value);
     });
     
     return text;
@@ -150,7 +157,7 @@ export default async function ServerComponent() {
   return <div>{t('welcome')}</div>;
 }
 \`\`\`
-      `
-    }
+      `,
+    },
   });
 }

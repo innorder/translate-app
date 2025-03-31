@@ -35,7 +35,7 @@ import InlineEditableCell from "./InlineEditableCell";
 import InlineEditableKeyCell from "./InlineEditableKeyCell";
 import NewKeyRow from "./NewKeyRow";
 
-interface TranslationKey {
+export interface TranslationKey {
   id: string;
   key: string;
   description?: string;
@@ -44,14 +44,14 @@ interface TranslationKey {
   translations: {
     [language: string]: string;
   };
-  history?: {
+  history?: Array<{
     action: string;
     user: string;
     timestamp: string;
     field?: string;
     old_value?: string;
     new_value?: string;
-  }[];
+  }>;
 }
 
 interface TranslationTableProps {

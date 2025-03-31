@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Upload, Download } from "lucide-react";
 import DashboardHeader from "@/components/translation/DashboardHeader";
 import NamespaceSelector from "@/components/translation/NamespaceSelector";
-import TranslationTable from "@/components/translation/TranslationTable";
+import TranslationTable, {
+  TranslationKey,
+} from "@/components/translation/TranslationTable";
 import ImportExportMenu from "@/components/translation/ImportExportMenu";
 import TableToolbar from "@/components/translation/TableToolbar";
 import SettingsDialog from "@/components/translation/SettingsDialog";
@@ -16,24 +18,20 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import HistoryDialog from "@/components/translation/HistoryDialog";
 import { supabase } from "@/lib/supabase";
 import { recordHistory } from "@/lib/history-service";
+import { Tables } from "@/types/supabase";
 
 interface Namespace {
   id: string;
   name: string;
 }
 
-interface TranslationKey {
-  id: string;
-  key: string;
-  description?: string;
-  lastUpdated: string;
-  status: "confirmed" | "unconfirmed";
-  translations: {
-    [language: string]: string;
-  };
+interface Translation {
+  key_id: string;
+  language_code: string;
+  value: string;
 }
 
-export default function TranslationDashboard() {
+export default function TranslationDashboard(): React.ReactNode {
   // State for dialogs
   const [importExportOpen, setImportExportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -84,14 +82,16 @@ export default function TranslationDashboard() {
           count: keysData?.length,
         });
 
-        let dbKeys = [];
+        let dbKeys: TranslationKey[] = [];
         if (keysSuccess && keysData && keysData.length > 0) {
-          dbKeys = keysData.map((key) => ({
+          dbKeys = keysData.map((key: Tables<"translation_keys">) => ({
             id: key.id,
             key: key.key,
             description: key.description || "",
-            lastUpdated: key.updated_at
-              ? new Date(key.updated_at).toISOString().split("T")[0]
+            lastUpdated: (key as any).updated_at
+              ? new Date((key as any).updated_at as string)
+                  .toISOString()
+                  .split("T")[0]
               : new Date().toISOString().split("T")[0],
             status: key.status as "confirmed" | "unconfirmed",
             translations: {},
@@ -115,14 +115,22 @@ export default function TranslationDashboard() {
 
         if (success && data) {
           // Group translations by key_id
-          const translationsByKeyId = data.reduce((acc, translation) => {
-            if (!acc[translation.key_id]) {
-              acc[translation.key_id] = {};
-            }
-            acc[translation.key_id][translation.language_code] =
-              translation.value;
-            return acc;
-          }, {});
+          const translationsByKeyId = data.reduce<
+            Record<string, Record<string, string>>
+          >(
+            (
+              acc: Record<string, Record<string, string>>,
+              translation: Translation,
+            ) => {
+              if (!acc[translation.key_id]) {
+                acc[translation.key_id] = {};
+              }
+              acc[translation.key_id][translation.language_code] =
+                translation.value;
+              return acc;
+            },
+            {},
+          );
 
           console.log(
             "Grouped translations by key_id, found translations for",
@@ -492,7 +500,7 @@ export default function TranslationDashboard() {
               // Create an updated key with confirmed status
               const updatedKey = {
                 ...key,
-                status: "confirmed",
+                status: "confirmed" as "confirmed" | "unconfirmed",
                 lastUpdated: new Date().toISOString().split("T")[0],
               };
 

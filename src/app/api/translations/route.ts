@@ -97,14 +97,28 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Get translations for the requested namespace and locale
-  const translations = mockTranslations[namespace]?.[locale] || {};
+  try {
+    // Get translations for the requested namespace and locale
+    const translations = mockTranslations[namespace]?.[locale] || {};
 
-  // Return the translations
-  return NextResponse.json(translations, {
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Content-Type": "application/json",
-    },
-  });
+    // Return the translations
+    return NextResponse.json(translations, {
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Content-Type": "application/json",
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching translations:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch translations" },
+      {
+        status: 500,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Content-Type": "application/json",
+        },
+      },
+    );
+  }
 }

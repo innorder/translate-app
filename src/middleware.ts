@@ -40,17 +40,25 @@ export async function middleware(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Here you would validate the API key against your database
-    // This is a placeholder for the actual implementation
-    const { data: validKey, error } = await supabase
-      .from("api_keys")
-      .select("*")
-      .eq("key", apiKey)
-      .eq("project_id", projectId)
-      .single();
+    try {
+      // Here you would validate the API key against your database
+      // This is a placeholder for the actual implementation
+      const { data: validKey, error } = await supabase
+        .from("api_keys")
+        .select("*")
+        .eq("key", apiKey)
+        .eq("project_id", projectId)
+        .single();
 
-    if (error || !validKey) {
-      return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
+      if (error || !validKey) {
+        return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
+      }
+    } catch (error) {
+      console.error("API key validation error:", error);
+      return NextResponse.json(
+        { error: "Authentication error" },
+        { status: 500 },
+      );
     }
   }
 

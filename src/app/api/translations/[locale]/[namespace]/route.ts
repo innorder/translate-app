@@ -75,12 +75,40 @@ export async function GET(
 
   // In a real application, validate the API key and project ID
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      {
+        status: 401,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Content-Type": "application/json",
+        },
+      },
+    );
   }
 
-  // Get translations for the requested namespace and locale
-  const translations = mockTranslations[namespace]?.[locale] || {};
+  try {
+    // Get translations for the requested namespace and locale
+    const translations = mockTranslations[namespace]?.[locale] || {};
 
-  // Return the translations
-  return NextResponse.json(translations);
+    // Return the translations
+    return NextResponse.json(translations, {
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Content-Type": "application/json",
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching translations:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch translations" },
+      {
+        status: 500,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Content-Type": "application/json",
+        },
+      },
+    );
+  }
 }

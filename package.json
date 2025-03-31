@@ -48,6 +48,7 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@vitejs/plugin-react-swc": "^3.5.0",
+    "cross-env": "^7.0.3",
     "postcss": "^8",
     "tailwind-merge": "^2",
     "tailwindcss": "^3",
