@@ -59,11 +59,13 @@ const LanguageManager = ({
       const { success, data, error } = await fetchLanguages();
       if (success && data && data.length > 0) {
         // Transform to the expected format
-        const dbLanguages = data.map((lang) => ({
-          code: lang.code,
-          name: lang.name,
-          id: lang.id,
-        }));
+        const dbLanguages = data.map(
+          (lang: { code: any; name: any; id: any }) => ({
+            code: lang.code,
+            name: lang.name,
+            id: lang.id,
+          })
+        );
         setCurrentLanguages(dbLanguages);
       } else if (error) {
         console.error("Error loading languages:", error);
@@ -101,7 +103,8 @@ const LanguageManager = ({
 
       if (!success || dbError) {
         throw new Error(
-          dbError?.message || "Failed to add language to database",
+          (dbError as unknown as any)?.message ||
+            "Failed to add language to database"
         );
       }
 
@@ -140,24 +143,25 @@ const LanguageManager = ({
       if (langToRemove?.id) {
         // Remove from database if we have an ID
         const { success, error: dbError } = await deleteLanguage(
-          langToRemove.id,
+          langToRemove.id
         );
         if (!success || dbError) {
           throw new Error(
-            dbError?.message || "Failed to remove language from database",
+            (dbError as unknown as any)?.message ||
+              "Failed to remove language from database"
           );
         }
       }
 
       // Remove from local state
       setCurrentLanguages(
-        currentLanguages.filter((lang) => lang.code !== code),
+        currentLanguages.filter((lang) => lang.code !== code)
       );
       setError("");
     } catch (err) {
       console.error("Error removing language:", err);
       setError(
-        err instanceof Error ? err.message : "Failed to remove language",
+        err instanceof Error ? err.message : "Failed to remove language"
       );
     } finally {
       setSaving(false);
@@ -167,7 +171,7 @@ const LanguageManager = ({
   const handleSave = async () => {
     // Find newly added languages (not in the original languages array)
     const newLanguages = currentLanguages.filter(
-      (lang) => !languages.some((origLang) => origLang.code === lang.code),
+      (lang) => !languages.some((origLang) => origLang.code === lang.code)
     );
 
     // If there are new languages and auto-translation is enabled, translate all keys

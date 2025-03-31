@@ -82,7 +82,7 @@ const ImportExportMenu = ({
       // Don't allow deselecting English (base language)
       if (code === "en") return;
       setSelectedLanguages((prevSelected) =>
-        prevSelected.filter((lang) => lang !== code),
+        prevSelected.filter((lang) => lang !== code)
       );
     } else {
       setSelectedLanguages((prevSelected) => [...prevSelected, code]);
@@ -146,7 +146,7 @@ const ImportExportMenu = ({
               // If this is English, mark it as base text for auto-translation
               if (selectedLanguage === "en") {
                 console.log(
-                  "Detected English single-language import - will be used as base text",
+                  "Detected English single-language import - will be used as base text"
                 );
 
                 // For single-language imports where the language is English,
@@ -193,7 +193,7 @@ const ImportExportMenu = ({
             const lines = content.split("\n");
             if (lines.length < 2) {
               throw new Error(
-                "CSV file must have at least a header row and one data row",
+                "CSV file must have at least a header row and one data row"
               );
             }
 
@@ -201,7 +201,7 @@ const ImportExportMenu = ({
             const headers = lines[0].split(",").map((h) => h.trim());
             if (headers.length < 2 || headers[0] !== "key") {
               throw new Error(
-                "CSV header must start with 'key' followed by language codes",
+                "CSV header must start with 'key' followed by language codes"
               );
             }
 
@@ -229,7 +229,7 @@ const ImportExportMenu = ({
           } else if (importFormat === "yaml") {
             // Basic YAML parsing (simplified)
             setError(
-              "YAML parsing is not fully implemented. Please use JSON or CSV format.",
+              "YAML parsing is not fully implemented. Please use JSON or CSV format."
             );
             return;
           }
@@ -243,7 +243,7 @@ const ImportExportMenu = ({
         } catch (err) {
           console.error("Error parsing file:", err);
           setError(
-            `Error parsing file: ${err instanceof Error ? err.message : "Unknown error"}`,
+            `Error parsing file: ${err instanceof Error ? err.message : "Unknown error"}`
           );
           setPreviewData(null);
         }
@@ -383,7 +383,7 @@ const ImportExportMenu = ({
     } catch (err) {
       console.error("Export error:", err);
       alert(
-        `Export failed: ${err instanceof Error ? err.message : "Unknown error"}`,
+        `Export failed: ${err instanceof Error ? err.message : "Unknown error"}`
       );
     }
   };
@@ -402,7 +402,7 @@ const ImportExportMenu = ({
       // Convert to the format expected by the application
       const processedData = Object.keys(importedData).map((key, index) => {
         // Ensure translations is an object with string values
-        const processedTranslations = {};
+        const processedTranslations: any = {};
         const translations = importedData[key];
 
         // Handle single-language JSON imports for English
@@ -482,7 +482,7 @@ const ImportExportMenu = ({
     } catch (err) {
       console.error("Import processing error:", err);
       setError(
-        `Import failed: ${err instanceof Error ? err.message : "Unknown error"}`,
+        `Import failed: ${err instanceof Error ? err.message : "Unknown error"}`
       );
     }
   };

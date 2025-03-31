@@ -46,14 +46,16 @@ export default function UserProvider({
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user || null);
-      setIsLoading(false);
+    } = supabase.auth.onAuthStateChange(
+      (event: string, session: { user: any }) => {
+        setUser(session?.user || null);
+        setIsLoading(false);
 
-      if (event === "SIGNED_OUT") {
-        router.push("/auth/login");
+        if (event === "SIGNED_OUT") {
+          router.push("/auth/login");
+        }
       }
-    });
+    );
 
     return () => {
       subscription.unsubscribe();

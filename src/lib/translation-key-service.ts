@@ -118,14 +118,14 @@ export const fetchTranslationKeys = async (projectId?: string) => {
       .select("*")
       .in(
         "key_id",
-        keysData.map((key) => key.id),
+        keysData.map((key: { id: any }) => key.id)
       );
 
     if (translationsError) throw translationsError;
 
     // Group translations by key_id
     const translationsByKeyId: Record<string, any[]> = {};
-    translationsData.forEach((translation) => {
+    translationsData.forEach((translation: { key_id: string | number }) => {
       if (!translationsByKeyId[translation.key_id]) {
         translationsByKeyId[translation.key_id] = [];
       }
@@ -138,7 +138,7 @@ export const fetchTranslationKeys = async (projectId?: string) => {
       .select("*")
       .in(
         "translation_id",
-        translationsData.map((translation) => translation.id),
+        translationsData.map((translation: { id: any }) => translation.id)
       )
       .order("performed_at", { ascending: false });
 
@@ -146,7 +146,7 @@ export const fetchTranslationKeys = async (projectId?: string) => {
 
     // Group history by translation_id
     const historyByTranslationId: Record<string, any[]> = {};
-    historyData?.forEach((history) => {
+    historyData?.forEach((history: { translation_id: string | number }) => {
       if (!historyByTranslationId[history.translation_id]) {
         historyByTranslationId[history.translation_id] = [];
       }
@@ -154,46 +154,58 @@ export const fetchTranslationKeys = async (projectId?: string) => {
     });
 
     // Map keys to the expected format
-    const formattedKeys = keysData.map((key) => {
-      const keyTranslations = translationsByKeyId[key.id] || [];
-      const translations: Record<string, string> = {};
-      const history: any[] = [];
+    const formattedKeys = keysData.map(
+      (key: {
+        id: string | number;
+        key: any;
+        description: any;
+        updated_at: string | number | Date;
+        created_at: string | number | Date;
+        status: any;
+        namespace_id: any;
+      }) => {
+        const keyTranslations = translationsByKeyId[key.id] || [];
+        const translations: Record<string, string> = {};
+        const history: any[] = [];
 
-      keyTranslations.forEach((translation) => {
-        translations[translation.language_code] = translation.value;
+        keyTranslations.forEach((translation) => {
+          translations[translation.language_code] = translation.value;
 
-        // Add history for this translation if available
-        const translationHistory = historyByTranslationId[translation.id] || [];
-        translationHistory.forEach((h) => {
-          history.push({
-            action: h.action,
-            user: h.performed_by || "system",
-            timestamp: new Date(h.performed_at).toISOString().split("T")[0],
-            field: translation.language_code,
-            old_value: h.previous_value,
-            new_value: h.new_value,
+          // Add history for this translation if available
+          const translationHistory =
+            historyByTranslationId[translation.id] || [];
+          translationHistory.forEach((h) => {
+            history.push({
+              action: h.action,
+              user: h.performed_by || "system",
+              timestamp: new Date(h.performed_at).toISOString().split("T")[0],
+              field: translation.language_code,
+              old_value: h.previous_value,
+              new_value: h.new_value,
+            });
           });
         });
-      });
 
-      return {
-        id: key.id,
-        key: key.key,
-        description: key.description || "",
-        lastUpdated: key.updated_at
-          ? new Date(key.updated_at).toISOString().split("T")[0]
-          : new Date(key.created_at).toISOString().split("T")[0],
-        status: key.status || "unconfirmed",
-        translations,
-        namespace_id: key.namespace_id,
-        history: history
-          .sort(
-            (a, b) =>
-              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-          )
-          .slice(0, 10),
-      };
-    });
+        return {
+          id: key.id,
+          key: key.key,
+          description: key.description || "",
+          lastUpdated: key.updated_at
+            ? new Date(key.updated_at).toISOString().split("T")[0]
+            : new Date(key.created_at).toISOString().split("T")[0],
+          status: key.status || "unconfirmed",
+          translations,
+          namespace_id: key.namespace_id,
+          history: history
+            .sort(
+              (a, b) =>
+                new Date(b.timestamp).getTime() -
+                new Date(a.timestamp).getTime()
+            )
+            .slice(0, 10),
+        };
+      }
+    );
 
     return { success: true, data: formattedKeys };
   } catch (error) {

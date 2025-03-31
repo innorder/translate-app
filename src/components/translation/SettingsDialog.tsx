@@ -120,6 +120,7 @@ const SettingsDialog = ({
 
   const handleSave = async () => {
     // Save API key to Supabase if provided
+    console.log("curret", currentSettings.apiKey);
     if (currentSettings.apiKey) {
       try {
         const { error } = await supabase
@@ -129,6 +130,7 @@ const SettingsDialog = ({
 
         if (error) throw error;
       } catch (error) {
+        console.log("curret", currentSettings.apiKey, supabase);
         console.error("Error saving API key:", error);
         alert("Failed to save API key to the database. Please try again.");
         return;
@@ -138,7 +140,7 @@ const SettingsDialog = ({
     // Save auto-translate setting
     localStorage.setItem(
       "enableAutoTranslate",
-      currentSettings.enableAutoTranslate.toString(),
+      currentSettings.enableAutoTranslate.toString()
     );
 
     onSave(currentSettings);
@@ -249,7 +251,7 @@ const SettingsDialog = ({
                     <Checkbox
                       id={`lang-${lang.code}`}
                       checked={currentSettings.visibleLanguages.includes(
-                        lang.code,
+                        lang.code
                       )}
                       onCheckedChange={() => toggleLanguage(lang.code)}
                       disabled={lang.code === "en"}

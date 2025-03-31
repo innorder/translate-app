@@ -14,7 +14,7 @@ interface NewKeyRowProps {
       key: string;
       description: string;
       translations: Record<string, string>;
-    },
+    }
   ) => void;
   onCancel: () => void;
 }
@@ -28,7 +28,7 @@ const NewKeyRow: React.FC<NewKeyRowProps> = ({
   const [keyName, setKeyName] = useState("");
   const [description, setDescription] = useState("");
   const [translations, setTranslations] = useState<Record<string, string>>(
-    languages.reduce((acc, lang) => ({ ...acc, [lang]: "" }), {}),
+    languages.reduce((acc, lang) => ({ ...acc, [lang]: "" }), {})
   );
   const keyInputRef = useRef<HTMLInputElement>(null);
 
@@ -56,7 +56,7 @@ const NewKeyRow: React.FC<NewKeyRowProps> = ({
     console.log(
       "Checking base text for auto-translation:",
       translations.en,
-      hasBaseText,
+      hasBaseText
     );
 
     let updatedTranslations = { ...translations };
@@ -67,7 +67,7 @@ const NewKeyRow: React.FC<NewKeyRowProps> = ({
         "Auto-translation triggered for new key",
         keyId,
         "with base text:",
-        translations.en,
+        translations.en
       );
 
       // Ensure the base text is not empty
@@ -85,7 +85,7 @@ const NewKeyRow: React.FC<NewKeyRowProps> = ({
       });
       console.log(
         "Dispatching auto-translate request with base text:",
-        translations.en,
+        translations.en
       );
       document.dispatchEvent(event);
 
@@ -97,14 +97,14 @@ const NewKeyRow: React.FC<NewKeyRowProps> = ({
             reject(new Error("Auto-translation timed out"));
           }, 10000); // Increased timeout to 10 seconds
 
-          const handleTranslationComplete = (event) => {
+          const handleTranslationComplete = (event: any) => {
             const { keyId: translatedKeyId, translations: newTranslations } =
               event.detail;
             console.log(
               "Received translation complete event for key",
               translatedKeyId,
               "current key:",
-              keyId,
+              keyId
             );
 
             if (translatedKeyId === keyId) {
@@ -112,12 +112,12 @@ const NewKeyRow: React.FC<NewKeyRowProps> = ({
                 "Translation complete for key",
                 keyId,
                 "with translations:",
-                newTranslations,
+                newTranslations
               );
               clearTimeout(timeout);
               document.removeEventListener(
                 "auto-translate-complete",
-                handleTranslationComplete,
+                handleTranslationComplete
               );
               resolve(newTranslations);
             }
@@ -125,7 +125,7 @@ const NewKeyRow: React.FC<NewKeyRowProps> = ({
 
           document.addEventListener(
             "auto-translate-complete",
-            handleTranslationComplete,
+            handleTranslationComplete
           );
         });
 
@@ -134,7 +134,7 @@ const NewKeyRow: React.FC<NewKeyRowProps> = ({
           console.log(
             "Applying translations for key",
             keyId,
-            translationResult,
+            translationResult
           );
           updatedTranslations = {
             ...updatedTranslations,
@@ -189,7 +189,7 @@ const NewKeyRow: React.FC<NewKeyRowProps> = ({
             value: value,
             created_by: "user_manual_edit",
           });
-        },
+        }
       );
 
       await Promise.all(translationPromises);
